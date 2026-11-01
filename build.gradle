@@ -115,7 +115,7 @@ tasks.register('generateVersion') {
             def pom = pomFile(g, a, v)
             if (pom == null)
                 return []
-            def xml = new XmlSlurper(false, false).parse(pom)
+            def xml = new groovy.xml.XmlSlurper(false, false).parse(pom)
             def found = xml.licenses.license.collect { [it.name.text().trim().replaceAll('\\s+', ' '), it.url.text().trim()] }
             if (!found.isEmpty() || depth > 5 || xml.parent.size() == 0)
                 return found
@@ -305,7 +305,14 @@ tasks.register('jlink', Exec) {
     def imageDir = layout.buildDirectory.dir("jre").get()
     def modulePath = "${System.getProperty('java.home')}/jmods"
 
-    commandLine 'jlink',
+    // The jlink of the JDK that runs Gradle (it needs the matching jmods folder, which a plain JRE or some
+    // runtime-only builds like the JetBrains Runtime don't have).
+    def jlinkExe = new File(System.getProperty('java.home'), 'bin/jlink' + (org.gradle.internal.os.OperatingSystem.current().windows ? '.exe' : ''))
+    doFirst {
+        if (!jlinkExe.exists() || !new File(modulePath).isDirectory())
+            throw new GradleException("The JDK ${System.getProperty('java.home')} has no jlink or jmods. Run Gradle with a full JDK.")
+    }
+    commandLine jlinkExe.absolutePath,
             '--module-path', modulePath,
             // jdeps result for the runtime classpath (Mustang needs XML, SQL and naming), plus logging for safety.
             '--add-modules', 'java.base,java.compiler,java.desktop,java.logging,java.management,java.naming,java.prefs,java.sql,java.xml,jdk.xml.dom',
@@ -320,6 +327,7 @@ launch4j {
     mainClassName = 'com.bw.pdfixit.Main'
     outputDir = layout.buildDirectory.dir("launch4j").get().asFile.absolutePath
     outfile = "PDFixit.exe"
+    icon = file('src/installer/icon.ico').absolutePath
     bundledJrePath = 'jre'
     // The bundled JRE is created by jlink from the JDK that runs the build, so it has no fixed version.
     // Only a lower limit: the byte code needs Java 17 (see options.release).
@@ -353,4 +361,79 @@ tasks.register('distZipWithJre', Zip) {
     }
     archiveFileName = "PDFixit-${project.version}-jre.zip"
     destinationDirectory = layout.buildDirectory.dir("distributions").get()
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Windows installer (MSI) built by jpackage. It needs a JDK with WiX 4/5 support (JDK 24 or newer) and the WiX
+// Toolset (the "wix" command must be on the PATH, with the extensions WixToolset.UI.wixext and
+// WixToolset.Util.wixext). The JDK is the one that runs Gradle, or -PjpackageJdk=<JDK home> or JPACKAGE_JDK.
+// The installer asks for the folder and whether to create shortcuts. The PDFs are not associated with the tool.
+// Installs for all users and asks for administrator rights. -PmsiPerUser builds a per-user installer instead.
+// ---------------------------------------------------------------------------------------------------------------
+
+// Never change this GUID: it lets a newer installer replace the installed version.
+def msiUpgradeUuid = '7f3c1a52-8d4e-4b6a-9c21-5e0b3d9a41f7'
+
+def msiInputDir = layout.buildDirectory.dir('msi/input')
+
+// The application jar, the libraries, the manual and the licenses. The manual is searched beside the jars.
+tasks.register('msiInput', Sync) {
+    dependsOn jar, bundleManual, generateVersion
+    into msiInputDir
+    from(jar)
+    from(configurations.runtimeClasspath)
+    from(tasks.named('bundleManual'))
+    from(thirdPartyLicenses)
+}
+
+tasks.register('msi') {
+    group = 'distribution'
+    description = 'Creates the Windows installer (MSI) with jpackage.'
+    dependsOn msiInput, jlink
+    def distDir = layout.buildDirectory.dir('distributions')
+    def workDir = layout.buildDirectory.dir('msi')
+    def jreDir = layout.buildDirectory.dir('jre')
+    def jarName = jar.archiveFileName
+    def perUser = project.hasProperty('msiPerUser')
+    // Default: the JDK that runs Gradle (JDK 24, see gradle/gradle-daemon-jvm.properties).
+    def jdkHome = (project.findProperty('jpackageJdk') ?: System.getenv('JPACKAGE_JDK') ?: System.getProperty('java.home')).toString()
+    def appVersion = project.version.toString().tokenize('.').with { (it + ['0', '0', '0']).take(3).join('.') }
+    def iconFile = file('src/installer/icon.ico')
+    def licenseFile = file('LICENSE')
+    doLast {
+        def jpackage = new File(jdkHome, 'bin/jpackage.exe')
+        if (!jpackage.exists())
+            throw new GradleException("jpackage not found: ${jpackage}")
+        def work = workDir.get().asFile
+        // The second launcher has a console, so the command line options show their output.
+        def cli = new File(work, 'cli-launcher.properties')
+        cli.text = 'win-console=true\n'
+        def args = [jpackage.absolutePath,
+                    '--type', 'msi',
+                    '--name', 'PDFixit',
+                    '--app-version', appVersion,
+                    '--vendor', 'BWeng20',
+                    '--description', 'PDFixit - PDF Workbench',
+                    '--icon', iconFile.absolutePath,
+                    '--license-file', licenseFile.absolutePath,
+                    '--input', new File(work, 'input').absolutePath,
+                    '--main-jar', jarName.get(),
+                    '--main-class', 'com.bw.pdfixit.Main',
+                    '--runtime-image', jreDir.get().asFile.absolutePath,
+                    '--dest', distDir.get().asFile.absolutePath,
+                    '--temp', new File(work, 'temp').absolutePath,
+                    '--add-launcher', "PDFixit-cli=${cli.absolutePath}",
+                    '--win-dir-chooser',
+                    '--win-menu', '--win-menu-group', 'PDFixit',
+                    '--win-shortcut', '--win-shortcut-prompt',
+                    '--win-upgrade-uuid', msiUpgradeUuid]
+        if (perUser)
+            args << '--win-per-user-install'
+        new File(work, 'temp').deleteDir()
+        logger.lifecycle('jpackage {}', args.drop(1).join(' '))
+        def proc = new ProcessBuilder(args.collect { it.toString() }).redirectErrorStream(true).start()
+        proc.inputStream.eachLine { logger.lifecycle(it) }
+        if (proc.waitFor() != 0)
+            throw new GradleException('jpackage failed. Is WiX installed (command "wix" on the PATH)?')
+    }
 }
