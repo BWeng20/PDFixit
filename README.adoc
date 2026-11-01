@@ -1,8 +1,9 @@
-= jPdfTool
+= PDFixit
 
 Apache PDFBox based tool to modify PDFs without paying any money.
 
-(Deutsche Version: link:README.de.adoc[README.de.adoc])
+ifdef::backend-pdf[(Deutsche Version: link:manual_de.pdf[manual_de.pdf])]
+ifndef::backend-pdf[(Deutsche Version: link:README.de.adoc[README.de.adoc])]
 
 This project began when I needed to protect a scanned PDF for an email, but the HP Scanner software couldn’t handle it. My old Brother scanner had this feature - plus other useful tools - and (by the way) worked without requiring any registration. +
 Rather than paying for Adobe or other commercial solutions, I turned to the PDFBox documentation.  +
@@ -13,7 +14,7 @@ The following days were spent adding fancy features to the UI and the build syst
 
 <<<
 
-== Current Features
+== Features
 
 image:doc/Screenshot Release3.0.png[Screenshot]
 
@@ -57,9 +58,8 @@ This effectively removes any hidden objects if you e.g. tried to redact document
 
 === Redact Text and Areas
 
-Permanently removes text matching a regular expression or rectangular areas. +
-In the UI, open the redaction dialog of a page, mark areas with the mouse or search for text. The help button of the dialog explains the details. +
-In the CLI, use `--redactText <regex>` and `--redactArea <page>:<x>,<y>,<width>,<height>`. Areas are given in points (1/72 inch) from the upper left corner of the page: `--redactArea 1:50,100,200,20`. Both options can be repeated.
+Permanently removes text or rectangular areas. +
+In the UI, open the redaction dialog of a page, mark areas with the mouse or search for text. The help button of the dialog explains the details.
 
 How it works: affected pages are rendered to an image, the areas are painted (black by default) and the page is replaced by that image. So the redacted content (and any other text on that page) is really gone and not just covered. Pages without redacted areas are not changed.
 
@@ -70,7 +70,7 @@ On redacted pages, text can't be selected or searched anymore, and annotations (
 Redaction only cleans the *content of the pages*. The following is *not* removed, check it yourself before you share a redacted document:
 
 * Bookmarks (outline), document information (title, author, ...) and XMP metadata.
-* Attached files. An e-invoice is detected: the UI asks what to do, the CLI refuses unless `--removeInvoice` is given (see below).
+* Attached files. An e-invoice is detected: the program asks what to do.
 * Values of form fields, they are stored outside the pages.
 
 Text search only finds real text, not text inside images (e.g. scanned pages). Mark such areas by hand.
@@ -79,30 +79,38 @@ Text search only finds real text, not text inside images (e.g. scanned pages). M
 <<<
 
 === E-Invoices (ZUGFeRD / Factur-X)
-Handles hybrid e-invoices: a PDF that carries the invoice as CII XML attachment (`factur-x.xml`, `ZUGFeRD-invoice.xml` or `xrechnung.xml`). +
-Pure XML invoices (XRechnung) are not supported. Based on the https://www.mustangproject.org[Mustang] library.
+Reads, creates and edits e-invoices: a PDF that carries the invoice data as an attached XML file. For invoices that consist of an XML file only (XRechnung), please use an XML tool.
 
-* The UI menu *Invoice* shows the invoice data, validates the document (PDF/A-3 and EN 16931 rules), saves the XML, attaches an XML or removes the invoice.
-* *Invoice > Create Invoice…* (or *Edit Invoice…* if the document has one) opens an editor for the invoice data: number, dates, seller, buyer, payment and items, with live totals. It creates profile EN 16931 or XRechnung and attaches it, or saves the XML. Missing data is listed before attaching. Seller (including the bank account) and buyer can be chosen from presets; the seller preset used last is the default for the next new invoice. All data of an existing invoice is kept, also data without a field in the form (e.g. allowances or a delivery address): the tab *All fields* shows every value of the XML as a table, where values and attributes can be changed and values removed. The sums (item totals, VAT breakdown, totals) are calculated again on each change, including allowances and charges. For the profiles MINIMUM and BASIC WL, which have no items, the editor shows a table of net amounts per VAT rate instead; the VAT, the totals and for BASIC WL the VAT breakdown are calculated from it. Fields a profile doesn't have (e.g. addresses in MINIMUM, contact person, account holder and BIC in BASIC WL) are disabled and not written. The service period (start and end, BG-14) is edited for the whole invoice only; a period of single items (BG-26) can't be entered, but an existing one is kept.
-* Seller and buyer presets can be managed with *Manage…* in the editor or *Invoice > Invoice Parties…*: a list with buttons to add and remove entries, and an editor for the selected one. Each entry can be used as seller, as buyer or both, the preset lists of the editor only show the matching entries. The list is stored in `~/.jPdfTool/parties.json`. A buyer can have default payment terms and days until due: choosing it in a new invoice fills the payment terms and the due date, if they are still empty. The editor also notes, without blocking, if neither a delivery date nor a service period is given, or if the delivery date lies outside the period.
-* CLI: `--extractInvoice <xml file>`, `--attachInvoice <xml file>`, `--removeInvoice` and `--validateInvoice` (validates the resulting file). `--validatePdfa` checks the resulting file with veraPDF, with or without an invoice.
-* Merging keeps the invoice. If both documents contain an invoice, only the one of the first document is kept.
-* Splitting keeps the invoice in the *first* part only, as a part is not the complete invoice any more.
-* Redaction doesn't touch the invoice data, so confidential data may remain in the XML. The UI asks what to do, the CLI refuses to redact such a document unless `--removeInvoice` is given.
-* Fonts that are not embedded are embedded when PDF/A-3 is enforced (converting to PDF/A, attaching an invoice): a metric compatible substitute replaces them (Arial/Helvetica by Arimo, Times by Tinos, Courier by Cousine, all others by the closest family). Text and characters stay, but fonts that are not metric compatible (e.g. Calibri) get the look and spacing of the substitute. Arimo, Tinos and Cousine are the Chrome OS core fonts, licensed under the Apache License 2.0 (`fonts/LICENSE-Apache-2.0.txt` in the jar). The licenses of all libraries and fonts are listed in the About dialog.
-* Composite (CID) fonts (encoding Identity-H, as written by Word, Chrome or LibreOffice) are substituted too: their characters are taken from the _ToUnicode_ table of the font, the codes are mapped to the glyphs of the substitute. Not possible are composite fonts without ToUnicode table or with another encoding, characters the substitute doesn't have (e.g. Chinese), and symbol fonts (Symbol, Wingdings, ...). The UI then reports the fonts, attaching an invoice fails (CLI exit code 13). The document is not changed then.
-* The menu _Fonts_ lists the fonts of the document. A selected font can be replaced by one of the bundled fonts, the best match is proposed. The text keeps its characters, the widths are those of the new font.
-* Own fonts: _Fonts > Manage Fonts..._ (or the button in the _Replace Font_ dialog) imports TrueType font files (`.ttf`). They are listed below the bundled fonts under their own heading and can be removed again (the font file itself is not touched). Name and path are stored in `~/.jPdfTool/fonts.json`; a font file is read only when the font is shown in the preview or used. Not usable: fonts with PostScript outlines (OpenType/CFF), font collections (`.ttc`), and fonts that forbid embedding (OS/2 fsType). A font that lacks characters of the text to be replaced is refused with the list of the missing characters; the document is not changed then. Bundled and imported fonts can both be used, but only subsets of the bundled fonts are written again when composite fonts are merged.
-* _Merge Duplicates_ in the font list merges fonts that exist more than once, e.g. one copy per page. Fonts with exactly the same content (font dictionary, widths, encoding, ToUnicode and font program) are merged; the resource name _/Name_ and the hints of the font descriptor are ignored. Composite fonts (Word) that are different subsets of the same font are merged too, if the codes of the pages don't have to change: when all codes of one font are in the other with the same character and width, the first is replaced by the other; when both have codes of their own, but nothing contradicts, and both are subsets of one of the bundled fonts (e.g. after _Replace_), the font is written again with the codes of both. Fonts with contradicting codes, other weights or other types (like the simple space fonts of Word next to its composite fonts) are not merged.
-* Attaching an XML fails with an error (CLI exit code 13) if the result is not a conform PDF/A-3 / EN 16931 document. The document is not changed then. Converting arbitrary PDFs to PDF/A-3 is not supported.
-* Encryption is not allowed for PDF/A-3. An encrypted document is no valid e-invoice any more. The CLI only encrypts if a password is given and logs a warning then.
+* The menu *Invoice* shows the invoice data, checks the document, saves the attached XML, attaches an XML file or removes the invoice.
+* *Invoice > Create Invoice…* (or *Edit Invoice…* if the document already has one) opens an editor for number, dates, seller, buyer, payment and items. The totals are calculated while you type. Missing data is listed before the invoice is attached. Data of an existing invoice that has no field in the form is kept; the tab *All fields* shows and changes it.
+* Seller and buyer can be chosen from presets, managed with *Manage…* in the editor or with *Invoice > Invoice Parties…*. A buyer can have default payment terms and days until due.
+* An e-invoice needs the PDF standard PDF/A-3. Attaching an invoice converts the document, if necessary. Not every document can be converted; then the invoice is not attached and the document stays unchanged. Details: <<pdf-standards,PDF Standards>>.
+* Merging keeps the invoice (if both documents have one, the one of the first document). Splitting keeps it in the first part only.
+* Redaction doesn't touch the invoice data, so confidential data may remain in it. The program asks what to do.
+* A document with an invoice must not be encrypted, otherwise it is no valid e-invoice any more.
 
 <<<
 
-* The UI shows the PDF version and the standards the document declares beside the page count. The button *PDF Standard...* opens a dialog to change the standard in two columns: all PDF/A levels (1a, 1b, 2a, 2b, 2u, 3a, 3b, 3u, 4, 4e, 4f) and the other standards (PDF/X-1a, X-3, X-4, PDF/UA-1, PDF/E-1, PDF/VT-1), or none. For each level it shows what will be changed (a trial run on a copy) and, marked with a warning icon, what is lost (e.g. the e-invoice and other embedded files for PDF/A-1 and 2, encryption) and what can't be repaired (transparency in PDF/A-1). The levels a (tagged structure) and u (Unicode text) are declared, but the tool can't create tags or Unicode tables: the veraPDF check tells what is missing. PDF/X, PDF/UA, PDF/E and PDF/VT are only declared and repaired as far as that is simple (PDF/X: information, trim box, sRGB output intent, fonts; PDF/UA: language, title display, tab order); veraPDF can't verify them, the dialog says so.
-* A document that declares PDF/A is kept conform: passwords, permissions and encryption, splitting, appending documents that are no PDF/A, and converting pages to images (including redaction) if the document has a non-RGB output intent (e.g. CMYK) are disabled. A document without output intent gets an sRGB output intent (the profile Mustang also uses for e-invoices), so its pages can be converted to images. A loaded document is not changed: if veraPDF finds violations and a repair would change something, the user is asked to repair it. Adding an invoice (attaching it or appending a document that has one) needs PDF/A-3: if the document has another level the user is asked to switch it, otherwise the operation is aborted; the added invoice is repaired automatically. Converting to PDF/A-1 switches the option _Compression_ off (PDF/A-1 forbids compressed object streams) and tells the user. Setting the level to _none_ removes the declaration, an e-invoice is no valid e-invoice then (no warning is shown when saving).
-* The document information (title, author, ...) is also written to the XMP metadata, as PDF/A requires both to be equal.
+[[pdf-standards]]
+=== PDF Standards
+Many offices and authorities require PDFs that stay readable for many years (archiving), or that are suitable for printing or for people with disabilities. Such requirements are met by _PDF standards_, see the table in the <<appendix-pdf-standards,Appendix: PDF Standards>>. A PDF tells which standard it follows, the program shows it beside the page count.
 
+* *Changing the standard:* The button *PDF Standard...* opens a dialog with the available standards. For each one it shows in plain words what will be changed and, marked with a warning icon, what will be lost or can't be fixed. Nothing is changed before you confirm.
+* *Not every document can be converted.* The program repairs what can be repaired automatically, but some documents can't be brought to a standard. The check result tells what is missing.
+* *Keeping the standard:* A document that follows a standard is protected from changes that would break it. Functions like passwords, splitting or adding documents that don't follow the standard are disabled then. If a loaded document has problems that a repair can fix, the program asks before it changes anything.
+* *Invoices:* Attaching an invoice needs PDF/A-3. If the document has another standard, the program asks whether it may switch it.
+* *Compression:* PDF/A-1 forbids compression. The program switches the option *Compression* off then and tells you.
+* *Removing the standard:* The document is an ordinary PDF afterwards. An e-invoice is no valid e-invoice any more.
+* The document information (title, author, ...) is kept in two places in the file, as the archiving standards require both to be equal. The program writes both.
+
+=== Fonts
+The menu *Fonts* lists the fonts of the document.
+
+* *Replace:* A selected font can be replaced by one of the bundled fonts, the best match is proposed. The text keeps its characters, but uses the new font.
+* *Missing fonts:* Fonts that are not embedded in the document are embedded when a PDF standard requires it. A similar bundled font is used (e.g. Arimo for Arial). Fonts without a metric compatible substitute (e.g. Calibri) look slightly different afterwards. Symbol fonts (Symbol, Wingdings, ...), unusual fonts and characters the substitute doesn't have (e.g. Chinese) can't be replaced; the program reports them and leaves the document unchanged.
+* *Own fonts:* *Fonts > Manage Fonts...* imports TrueType font files (`.ttf`), which can then be used like the bundled ones. Fonts with PostScript outlines (OpenType/CFF), font collections (`.ttc`) and fonts that forbid embedding can't be used. A font that lacks characters of the text is refused with a list of the missing characters.
+* *Merge Duplicates:* Fonts that exist more than once in the document, e.g. one copy per page, are merged to make the file smaller. Fonts that differ in a way that would change the text are not merged.
+* The bundled fonts Arimo, Tinos and Cousine are licensed under the Apache License 2.0.
 
 === Remember Passwords
 
@@ -131,10 +139,7 @@ Export the PDF into separate documents.
 === Language of the User Interface
 
 The menu _Options > Language_ sets the language of the user interface: the system default or one of the bundled languages (currently English and German). +
-After a change the program asks whether to restart right away. A restart carries a loaded document, including its unwritten changes, over to the new window. +
-The command line uses the same language. The system property `jpdftool.lang` (e.g. `-Djpdftool.lang=en`) sets it for one call.
-
-*More languages:* create the file `messages_<code>.properties` (UTF-8) in `src/main/resources`, translate all keys of `messages.properties` and add the code to the key `lang.available`. The test `I18nTest` checks that no key is missing and the placeholders match. For the manual add `README.<code>.adoc`, which becomes `manual_<code>.pdf`.
+After a change the program asks whether to restart right away. A restart carries a loaded document, including its unwritten changes, over to the new window.
 
 === Switch "Look-And-Feels"
 
@@ -162,14 +167,15 @@ For example, on *Linux* or *macOS*, you can run the application using the follow
 
 [source%unbreakable,console]
 ----
-java -cp "$(printf %s: lib/*.jar)" com.bw.jPdfTool.Main
+java -cp "$(printf %s: lib/*.jar)" com.bw.pdfixit.Main
 ----
 
 This command simply adds all JARs in the lib folder to the classpath.
-The main class is `com.bw.jPdfTool.Main`.
+The main class is `com.bw.pdfixit.Main`.
 Calling it without any arguments will launch the *Graphical User Interface (GUI)*. +
-Calling it with only file names (no options) opens these files in the GUI, e.g. `jPdfTool.exe a.pdf b.pdf` loads `a.pdf` and appends `b.pdf`.
+Calling it with only file names (no options) opens these files in the GUI, e.g. `PDFixit.exe a.pdf b.pdf` loads `a.pdf` and appends `b.pdf`.
 
+[[cli]]
 == Command Line Interface (CLI)
 
 In case you need to call the tool from a *CI/CD Pipeline* or script,
@@ -185,12 +191,54 @@ To show the usage information of the CLI, use:
 
 [source%unbreakable,console]
 ----
-java -cp "$(printf %s: lib/*.jar)" com.bw.jPdfTool.Main -h
+java -cp "$(printf %s: lib/*.jar)" com.bw.pdfixit.Main -h
 ----
 
-Add `--debug` to see debug output and stack traces. It also works together with file names to start the UI in debug mode (for the UI or the exe you can also set the system property `jpdftool.debug=true`).
+Add `--debug` to see debug output and stack traces. It also works together with file names to start the UI in debug mode (for the UI or the exe you can also set the system property `pdfixit.debug=true`).
 
 <<<
+
+== Command Line Options
+
+The options of the command line, by task. How to start the tool from the command line is explained in <<cli,Command Line Interface (CLI)>>. Options with a value are written like `--option <value>`; file names with spaces must be put in quotation marks.
+
+[cols="2,3,4"]
+|===
+|Task |Option |Meaning
+
+|Redact
+|`--redactText <regex>`
+|Removes text that matches the regular expression. Can be repeated.
+
+|Redact
+|`--redactArea <page>:<x>,<y>,<width>,<height>`
+|Removes a rectangular area. The values are in points (1/72 inch) from the upper left corner of the page, e.g. `--redactArea 1:50,100,200,20`. Can be repeated.
+
+|E-invoice
+|`--extractInvoice <xml file>`
+|Saves the invoice XML of the document to a file.
+
+|E-invoice
+|`--attachInvoice <xml file>`
+|Attaches the invoice XML to the document.
+
+|E-invoice
+|`--removeInvoice`
+|Removes the invoice. Needed to redact a document that contains an invoice, as the invoice data would not be redacted.
+
+|E-invoice
+|`--validateInvoice`
+|Checks that the resulting file is a valid e-invoice.
+
+|PDF standard
+|`--validatePdfa`
+|Checks that the resulting file follows its PDF/A standard.
+
+|Language
+|`-Dpdfixit.lang=en`
+|Sets the language (`en`, `de`) for one call. It is a Java system property and is written before the program name.
+|===
+
 
 === Exit Codes
 
@@ -226,14 +274,83 @@ Feel free to ask in case you need special functionality.
 Because the tool uses *PDFBox* for all the magic, there are special considerations for headless environments:
 
 * *GUI is not created for CLI:* +
-  If the CLI is used, the User Interface is not created, so it should run on a headless system (a server without a display).
+If the CLI is used, the User Interface is not created, so it should run on a headless system (a server without a display).
 * *AWT Dependency:* +
-    PDFBox internally uses some *Abstract Window Toolkit (AWT)* classes. These classes may require a *full JRE* to work, even if the application is running "off-screen" without a physical display installed. +
-    *Pure Headless JRE Risk:* A _pure_ headless JRE might throw an error when an AWT class is instantiated. While you might use the CLI on a headless system, using a JRE specifically configured as _purely_ headless may be problematic.
+PDFBox internally uses some *Abstract Window Toolkit (AWT)* classes. These classes may require a *full JRE* to work, even if the application is running "off-screen" without a physical display installed. +
+*Pure Headless JRE Risk:* A _pure_ headless JRE might throw an error when an AWT class is instantiated. While you might use the CLI on a headless system, using a JRE specifically configured as _purely_ headless may be problematic.
 
 *Recommendation:* Try running it. Success depends on the specific headless JRE implementation you are using.
 
-== Dependencies
+
+[[appendix-pdf-standards]]
+== Appendix: PDF Standards
+
+A PDF standard is an agreement about what a PDF may contain, so that it behaves the same everywhere and for a long time. The program can set and, as far as that is simple, repair the following ones:
+
+[cols="1,2,4"]
+|===
+|Standard |Purpose |Specialities
+
+|PDF/A-1b
+|Archiving (oldest)
+|Looks the same everywhere. No transparency, no attachments (an e-invoice is lost), no compression of the file structure. Can be checked.
+
+|PDF/A-1a
+|Archiving
+|Like 1b, plus a structure for screen readers. The program can't create that structure; the check tells what is missing.
+
+|PDF/A-2b
+|Archiving
+|Like 1b, but allows transparency and smaller files. No attachments, except PDF/A files (an e-invoice is lost).
+
+|PDF/A-2u
+|Archiving
+|Like 2b, plus reliable copying of the text. The program can't create the needed tables for all fonts; the check tells.
+
+|PDF/A-2a
+|Archiving
+|Like 2u, plus a structure for screen readers (can't be created by the program).
+
+|PDF/A-3b
+|Archiving, e-invoices
+|Like 2b, but any file may be attached. Used for e-invoices (ZUGFeRD / Factur-X).
+
+|PDF/A-3u, PDF/A-3a
+|Archiving, e-invoices
+|Like 3b, plus reliable text copying (u), or plus a structure for screen readers (a).
+
+|PDF/A-4
+|Archiving (newest)
+|Based on a newer PDF version. Simplified levels.
+
+|PDF/A-4e
+|Archiving
+|Like 4, also for 3D and engineering content.
+
+|PDF/A-4f
+|Archiving
+|Like 4, attachments are allowed.
+
+|PDF/X-1a, X-3, X-4
+|Exchange of print data
+|Colors and page boxes must be defined. The program sets information, trim box, sRGB output intent and fonts. X-4 allows transparency. Can't be checked.
+
+|PDF/UA-1
+|Accessibility
+|Readable by screen readers. The program sets language, title display and tab order, but can't create the structure. Can't be checked.
+
+|PDF/E-1
+|Engineering documents
+|Exchange of technical documents. Only declared. Can't be checked.
+
+|PDF/VT-1
+|Variable data printing
+|E.g. mass mailings. Only declared. Can't be checked.
+|===
+
+If you are unsure, use *PDF/A-3b* for e-invoices and *PDF/A-2b* for plain archiving.
+
+== Appendix: Dependencies
 
 The libraries and fonts the tool uses (versions are defined in `build.gradle`). The code needs Java 17 or newer.
 
@@ -267,7 +384,7 @@ The libraries and fonts the tool uses (versions are defined in `build.gradle`). 
 
 |https://github.com/FasterXML/jackson[Jackson] (`jackson-databind`)
 |JSON
-|Stores the seller and buyer presets in `~/.jPdfTool/parties.json`. The version is the one Mustang uses.
+|Stores the seller and buyer presets in `~/.pdfixit/parties.json`. The version is the one Mustang uses.
 
 |https://www.formdev.com/flatlaf/[FlatLaf] (`flatlaf`, `flatlaf-fonts-roboto`)
 |User interface

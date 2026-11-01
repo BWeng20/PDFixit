@@ -1,9 +1,10 @@
-= jPdfTool
+= PDFixit
 :lang: de
 
 Auf Apache PDFBox basierendes Werkzeug zum Bearbeiten von PDFs – ohne dafür Geld auszugeben.
 
-(English version: link:README.adoc[README.adoc])
+ifdef::backend-pdf[(English version: link:manual.pdf[manual.pdf])]
+ifndef::backend-pdf[(English version: link:README.adoc[README.adoc])]
 
 Das Projekt entstand, als ich ein gescanntes PDF für eine E-Mail schützen wollte, die HP-Scanner-Software das aber nicht konnte. Mein alter Brother-Scanner hatte diese Funktion – und weitere nützliche Werkzeuge – und funktionierte (nebenbei) ganz ohne Registrierung. +
 Statt Adobe oder andere kommerzielle Lösungen zu bezahlen, habe ich mich in die PDFBox-Dokumentation eingelesen. +
@@ -14,7 +15,7 @@ In den folgenden Tagen habe ich – nur zum Spaß – immer weitere Funktionen i
 
 <<<
 
-== Aktuelle Funktionen
+== Funktionen
 
 image:doc/Screenshot Release3.0.png[Screenshot]
 
@@ -58,9 +59,8 @@ Dadurch werden versteckte Objekte entfernt, z. B. wenn Sie versucht haben, ein D
 
 === Text und Bereiche schwärzen
 
-Entfernt Text, der zu einem regulären Ausdruck passt, oder rechteckige Bereiche dauerhaft. +
-In der Oberfläche öffnen Sie den Schwärzen-Dialog einer Seite, markieren Bereiche mit der Maus oder suchen nach Text. Die Hilfe-Schaltfläche des Dialogs erklärt die Einzelheiten. +
-In der Kommandozeile verwenden Sie `--redactText <regex>` und `--redactArea <Seite>:<x>,<y>,<Breite>,<Höhe>`. Bereiche werden in Punkt (1/72 Zoll) von der linken oberen Seitenecke angegeben: `--redactArea 1:50,100,200,20`. Beide Optionen können mehrfach angegeben werden.
+Entfernt Text oder rechteckige Bereiche dauerhaft. +
+In der Oberfläche öffnen Sie den Schwärzen-Dialog einer Seite, markieren Bereiche mit der Maus oder suchen nach Text. Die Hilfe-Schaltfläche des Dialogs erklärt die Einzelheiten.
 
 Funktionsweise: Betroffene Seiten werden in ein Bild gerendert, die Bereiche werden übermalt (standardmäßig schwarz) und die Seite wird durch dieses Bild ersetzt. Die geschwärzten Inhalte (und jeder andere Text dieser Seite) sind damit wirklich entfernt und nicht nur verdeckt. Seiten ohne geschwärzte Bereiche bleiben unverändert.
 
@@ -71,7 +71,7 @@ Auf geschwärzten Seiten lässt sich Text nicht mehr markieren oder durchsuchen,
 Das Schwärzen bereinigt nur den *Inhalt der Seiten*. Folgendes wird *nicht* entfernt – prüfen Sie es selbst, bevor Sie ein geschwärztes Dokument weitergeben:
 
 * Lesezeichen (Gliederung), Dokumentinformationen (Titel, Autor, ...) und XMP-Metadaten.
-* Angehängte Dateien. Eine E-Rechnung wird erkannt: Die Oberfläche fragt, was geschehen soll, die Kommandozeile verweigert die Arbeit, solange `--removeInvoice` fehlt (siehe unten).
+* Angehängte Dateien. Eine E-Rechnung wird erkannt: Das Programm fragt, was geschehen soll.
 * Werte von Formularfeldern, da sie außerhalb der Seiten gespeichert sind.
 
 Die Textsuche findet nur echten Text, keinen Text in Bildern (z. B. gescannte Seiten). Solche Bereiche markieren Sie von Hand.
@@ -80,30 +80,38 @@ Die Textsuche findet nur echten Text, keinen Text in Bildern (z. B. gescannte Se
 <<<
 
 === E-Rechnungen (ZUGFeRD / Factur-X)
-Verarbeitet hybride E-Rechnungen: ein PDF, das die Rechnung als CII-XML-Anhang enthält (`factur-x.xml`, `ZUGFeRD-invoice.xml` oder `xrechnung.xml`). +
-Reine XML-Rechnungen (XRechnung) werden nicht unterstützt. Basiert auf der Bibliothek https://www.mustangproject.org[Mustang].
+Liest, erstellt und bearbeitet E-Rechnungen: ein PDF, das die Rechnungsdaten als angehängte XML-Datei enthält. Für Rechnungen, die nur aus einer XML-Datei bestehen (XRechnung), nehmen Sie bitte ein XML Tool.
 
-* Das Menü *Rechnung* der Oberfläche zeigt die Rechnungsdaten, validiert das Dokument (PDF/A-3 und EN-16931-Regeln), speichert das XML, hängt ein XML an oder entfernt die Rechnung.
-* *Rechnung > Rechnung erstellen…* (bzw. *Rechnung bearbeiten…*, wenn das Dokument bereits eine Rechnung enthält) öffnet einen Editor für die Rechnungsdaten: Nummer, Datum, Verkäufer, Käufer, Zahlung und Positionen, mit laufend berechneten Summen. Er erzeugt das Profil EN 16931 oder XRechnung und hängt es an, oder speichert das XML. Fehlende Angaben werden vor dem Anhängen aufgelistet. Verkäufer (einschließlich Bankverbindung) und Käufer können aus Vorlagen gewählt werden; die zuletzt verwendete Verkäufervorlage ist bei der nächsten neuen Rechnung voreingestellt. Alle Daten einer vorhandenen Rechnung bleiben erhalten, auch solche ohne Feld im Formular (z. B. Nachlässe oder eine Lieferadresse): Der Reiter *Alle Felder* zeigt jeden Wert des XML als Tabelle, in der Werte und Attribute geändert und Werte gelöscht werden können. Die Summen (Positionssummen, Steueraufschlüsselung, Gesamtbeträge) werden bei jeder Änderung neu berechnet, einschließlich Nachlässen und Zuschlägen. Für die Profile MINIMUM und BASIC WL, die keine Positionen haben, zeigt der Editor stattdessen eine Tabelle mit Nettobeträgen je Steuersatz; Steuer, Summen und bei BASIC WL die Steueraufschlüsselung werden daraus berechnet. Felder, die ein Profil nicht kennt (z. B. Adressen in MINIMUM, Ansprechpartner, Kontoinhaber und BIC in BASIC WL), sind deaktiviert und werden nicht geschrieben. Der Leistungszeitraum (Beginn und Ende, BG-14) wird nur für die ganze Rechnung bearbeitet; der Zeitraum einzelner Positionen (BG-26) kann nicht eingegeben werden, ein vorhandener bleibt aber erhalten.
-* Verkäufer- und Käufervorlagen werden mit *Verwalten…* im Editor oder über *Rechnung > Rechnungsparteien…* verwaltet: eine Liste mit Schaltflächen zum Hinzufügen und Entfernen sowie ein Editor für den gewählten Eintrag. Jeder Eintrag kann als Verkäufer, als Käufer oder als beides verwendet werden; die Vorlagenlisten im Editor zeigen nur passende Einträge. Die Liste liegt in `~/.jPdfTool/parties.json`. Ein Käufer kann Standard-Zahlungsbedingungen und Zahlungsziel (Tage) haben: Wird er in einer neuen Rechnung gewählt, füllt das die Zahlungsbedingungen und das Fälligkeitsdatum, sofern diese noch leer sind. Der Editor weist außerdem – ohne zu blockieren – darauf hin, wenn weder Lieferdatum noch Leistungszeitraum angegeben sind oder das Lieferdatum außerhalb des Zeitraums liegt.
-* Kommandozeile: `--extractInvoice <xml-Datei>`, `--attachInvoice <xml-Datei>`, `--removeInvoice` und `--validateInvoice` (validiert die entstehende Datei). `--validatePdfa` prüft die entstehende Datei mit veraPDF, mit oder ohne Rechnung.
-* Beim Zusammenführen bleibt die Rechnung erhalten. Enthalten beide Dokumente eine Rechnung, wird nur die des ersten Dokuments behalten.
-* Beim Aufteilen bleibt die Rechnung nur im *ersten* Teil, da ein Teil nicht mehr die vollständige Rechnung ist.
-* Das Schwärzen berührt die Rechnungsdaten nicht, vertrauliche Daten können also im XML verbleiben. Die Oberfläche fragt nach, die Kommandozeile verweigert das Schwärzen eines solchen Dokuments, solange `--removeInvoice` fehlt.
-* Nicht eingebettete Schriften werden eingebettet, wenn PDF/A-3 erzwungen wird (Umwandlung in PDF/A, Anhängen einer Rechnung): Ein metrisch kompatibler Ersatz tritt an ihre Stelle (Arial/Helvetica durch Arimo, Times durch Tinos, Courier durch Cousine, alle anderen durch die ähnlichste Familie). Text und Zeichen bleiben erhalten, Schriften ohne metrisch kompatiblen Ersatz (z. B. Calibri) erhalten aber Aussehen und Laufweite des Ersatzes. Arimo, Tinos und Cousine sind die Kernschriften von Chrome OS unter der Apache License 2.0 (`fonts/LICENSE-Apache-2.0.txt` im Jar). Die Lizenzen aller Bibliotheken und Schriften stehen im About-Dialog.
-* Zusammengesetzte (CID-)Schriften (Kodierung Identity-H, wie von Word, Chrome oder LibreOffice geschrieben) werden ebenfalls ersetzt: Ihre Zeichen stammen aus der _ToUnicode_-Tabelle der Schrift, die Codes werden auf die Glyphen des Ersatzes abgebildet. Nicht möglich sind zusammengesetzte Schriften ohne ToUnicode-Tabelle oder mit anderer Kodierung, Zeichen, die der Ersatz nicht hat (z. B. Chinesisch), und Symbolschriften (Symbol, Wingdings, ...). Die Oberfläche meldet dann die Schriften, das Anhängen einer Rechnung schlägt fehl (Kommandozeile: Exit-Code 13). Das Dokument bleibt in diesem Fall unverändert.
-* Das Menü _Schriften_ listet die Schriften des Dokuments. Eine gewählte Schrift kann durch eine der mitgelieferten ersetzt werden, die beste Übereinstimmung wird vorgeschlagen. Der Text behält seine Zeichen, die Breiten sind die der neuen Schrift.
-* Eigene Schriften: _Schriften > Schriften verwalten..._ (oder die Schaltfläche im Dialog _Schrift ersetzen_) importiert TrueType-Dateien (`.ttf`). Sie stehen unter eigener Überschrift unterhalb der mitgelieferten Schriften und können wieder entfernt werden (die Schriftdatei selbst bleibt unberührt). Name und Pfad liegen in `~/.jPdfTool/fonts.json`; eine Schriftdatei wird erst gelesen, wenn die Schrift in der Vorschau angezeigt oder verwendet wird. Nicht verwendbar sind Schriften mit PostScript-Konturen (OpenType/CFF), Schriftsammlungen (`.ttc`) und Schriften, die das Einbetten verbieten (OS/2 fsType). Fehlen einer Schrift Zeichen des zu ersetzenden Textes, wird sie mit der Liste der fehlenden Zeichen abgelehnt; das Dokument bleibt unverändert. Mitgelieferte und importierte Schriften können gemeinsam verwendet werden, beim Zusammenführen zusammengesetzter Schriften werden aber nur Teilmengen der mitgelieferten Schriften neu geschrieben.
-* _Duplikate zusammenführen_ in der Schriftenliste führt mehrfach vorhandene Schriften zusammen, z. B. eine Kopie je Seite. Schriften mit exakt gleichem Inhalt (Schriftdictionary, Breiten, Kodierung, ToUnicode und Schriftprogramm) werden zusammengeführt; der Ressourcenname _/Name_ und die Hinweise des Font-Deskriptors werden ignoriert. Auch zusammengesetzte Schriften (Word), die verschiedene Teilmengen derselben Schrift sind, werden zusammengeführt, wenn sich die Codes der Seiten nicht ändern müssen: Sind alle Codes der einen Schrift mit gleichem Zeichen und gleicher Breite in der anderen enthalten, ersetzt die andere die erste; haben beide eigene Codes, widerspricht sich aber nichts und beide sind Teilmengen einer mitgelieferten Schrift (z. B. nach _Ersetzen_), wird die Schrift mit den Codes beider neu geschrieben. Schriften mit widersprüchlichen Codes, anderen Schnitten oder anderen Typen (etwa die einfachen Leerzeichen-Schriften von Word neben seinen zusammengesetzten Schriften) werden nicht zusammengeführt.
-* Das Anhängen eines XML schlägt mit einem Fehler fehl (Kommandozeile: Exit-Code 13), wenn das Ergebnis kein konformes PDF/A-3- bzw. EN-16931-Dokument ist. Das Dokument bleibt dann unverändert. Beliebige PDFs in PDF/A-3 umzuwandeln wird nicht unterstützt.
-* Verschlüsselung ist für PDF/A-3 nicht erlaubt. Ein verschlüsseltes Dokument ist keine gültige E-Rechnung mehr. Die Kommandozeile verschlüsselt nur, wenn ein Kennwort angegeben ist, und gibt dann eine Warnung aus.
+* Das Menü *Rechnung* zeigt die Rechnungsdaten, prüft das Dokument, speichert das angehängte XML, hängt eine XML-Datei an oder entfernt die Rechnung.
+* *Rechnung > Rechnung erstellen…* (bzw. *Rechnung bearbeiten…*, wenn das Dokument bereits eine enthält) öffnet einen Editor für Nummer, Datum, Verkäufer, Käufer, Zahlung und Positionen. Die Summen werden beim Tippen berechnet. Fehlende Angaben werden vor dem Anhängen aufgelistet. Daten einer vorhandenen Rechnung, die kein Feld im Formular haben, bleiben erhalten; der Reiter *Alle Felder* zeigt und ändert sie.
+* Verkäufer und Käufer können aus Vorlagen gewählt werden, die mit *Verwalten…* im Editor oder mit *Rechnung > Rechnungsparteien…* verwaltet werden. Ein Käufer kann Standard-Zahlungsbedingungen und ein Zahlungsziel haben.
+* Eine E-Rechnung benötigt den PDF-Standard PDF/A-3. Beim Anhängen einer Rechnung wird das Dokument bei Bedarf umgewandelt. Nicht jedes Dokument lässt sich umwandeln; dann wird die Rechnung nicht angehängt und das Dokument bleibt unverändert. Details: <<pdf-standards,PDF-Standards>>.
+* Beim Zusammenführen bleibt die Rechnung erhalten (haben beide Dokumente eine, die des ersten). Beim Aufteilen bleibt sie nur im ersten Teil.
+* Das Schwärzen berührt die Rechnungsdaten nicht, vertrauliche Daten können darin verbleiben. Das Programm fragt nach, was geschehen soll.
+* Ein Dokument mit Rechnung darf nicht verschlüsselt sein, sonst ist es keine gültige E-Rechnung mehr.
 
 <<<
 
-* Die Oberfläche zeigt neben der Seitenzahl die PDF-Version und die Standards, die das Dokument deklariert. Die Schaltfläche *PDF-Standard...* öffnet einen Dialog zum Ändern des Standards in zwei Spalten: alle PDF/A-Stufen (1a, 1b, 2a, 2b, 2u, 3a, 3b, 3u, 4, 4e, 4f) und die übrigen Standards (PDF/X-1a, X-3, X-4, PDF/UA-1, PDF/E-1, PDF/VT-1) oder keiner. Für jede Stufe zeigt er, was geändert wird (ein Probelauf auf einer Kopie) und – mit Warnsymbol – was verloren geht (z. B. die E-Rechnung und andere eingebettete Dateien bei PDF/A-1 und 2, die Verschlüsselung) und was nicht repariert werden kann (Transparenz bei PDF/A-1). Die Stufen a (getaggte Struktur) und u (Unicode-Text) werden deklariert, das Werkzeug kann aber weder Tags noch Unicode-Tabellen erzeugen: Die veraPDF-Prüfung sagt, was fehlt. PDF/X, PDF/UA, PDF/E und PDF/VT werden nur deklariert und so weit repariert, wie es einfach ist (PDF/X: Informationen, Trim-Box, sRGB-Ausgabeintent, Schriften; PDF/UA: Sprache, Titelanzeige, Tab-Reihenfolge); veraPDF kann sie nicht prüfen, der Dialog weist darauf hin.
-* Ein Dokument, das PDF/A deklariert, bleibt konform: Kennwörter, Berechtigungen und Verschlüsselung, Aufteilen, Anhängen von Dokumenten, die kein PDF/A sind, und das Umwandeln von Seiten in Bilder (auch beim Schwärzen) bei einem Ausgabeintent ohne RGB (z. B. CMYK) sind deaktiviert. Ein Dokument ohne Ausgabeintent erhält einen sRGB-Ausgabeintent (das Profil, das auch Mustang für E-Rechnungen verwendet), sodass seine Seiten in Bilder umgewandelt werden können. Ein geladenes Dokument wird nicht verändert: Findet veraPDF Verstöße und würde eine Reparatur etwas ändern, wird der Benutzer gefragt, ob repariert werden soll. Das Hinzufügen einer Rechnung (Anhängen oder Anhängen eines Dokuments mit Rechnung) erfordert PDF/A-3: Hat das Dokument eine andere Stufe, wird der Benutzer gefragt, ob umgestellt werden soll, andernfalls wird abgebrochen; die hinzugefügte Rechnung wird automatisch repariert. Die Umwandlung in PDF/A-1 schaltet die Option _Komprimierung_ aus (PDF/A-1 verbietet komprimierte Objektströme) und teilt das mit. Wird die Stufe auf _none_ gesetzt, entfällt die Deklaration; eine E-Rechnung ist dann keine gültige E-Rechnung mehr (beim Speichern erscheint dazu keine Warnung).
-* Die Dokumentinformationen (Titel, Autor, ...) werden auch in die XMP-Metadaten geschrieben, da PDF/A verlangt, dass beide gleich sind.
+[[pdf-standards]]
+=== PDF-Standards
+Viele Firmen und Behörden verlangen PDFs, die über Jahre lesbar bleiben (Archivierung) oder die sich für den Druck oder für Menschen mit Behinderung eignen. Solche Anforderungen erfüllen _PDF-Standards_, siehe die Tabelle im <<appendix-pdf-standards,Anhang: PDF-Standards>>. Ein PDF gibt an, welchem Standard es folgt; das Programm zeigt ihn neben der Seitenzahl an.
 
+* *Standard ändern:* Die Schaltfläche *PDF-Standard...* öffnet einen Dialog mit den verfügbaren Standards. Zu jedem zeigt er in einfachen Worten, was geändert wird und – mit Warnsymbol – was verloren geht oder sich nicht beheben lässt. Vor der Bestätigung wird nichts verändert.
+* *Nicht jedes Dokument lässt sich umwandeln.* Das Programm repariert automatisch, was sich reparieren lässt, manche Dokumente lassen sich aber nicht in einen Standard bringen. Das Prüfergebnis sagt, was fehlt.
+* *Standard erhalten:* Ein Dokument, das einem Standard folgt, wird vor Änderungen geschützt, die ihn verletzen würden. Funktionen wie Kennwörter, Aufteilen oder das Anhängen von Dokumenten, die dem Standard nicht folgen, sind dann deaktiviert. Hat ein geladenes Dokument Mängel, die eine Reparatur beheben kann, fragt das Programm, bevor es etwas ändert.
+* *Rechnungen:* Das Anhängen einer Rechnung erfordert PDF/A-3. Hat das Dokument einen anderen Standard, fragt das Programm, ob umgestellt werden darf.
+* *Komprimierung:* PDF/A-1 verbietet Komprimierung. Das Programm schaltet die Option *Komprimierung* dann aus und teilt das mit.
+* *Standard entfernen:* Das Dokument ist danach ein gewöhnliches PDF. Eine E-Rechnung ist keine gültige E-Rechnung mehr.
+* Die Dokumentinformationen (Titel, Autor, ...) stehen an zwei Stellen in der Datei, da die Archivierungsstandards verlangen, dass beide gleich sind. Das Programm schreibt beide.
+
+=== Schriften
+Das Menü *Schriften* listet die Schriften des Dokuments.
+
+* *Ersetzen:* Eine gewählte Schrift kann durch eine der mitgelieferten ersetzt werden, die beste Übereinstimmung wird vorgeschlagen. Der Text behält seine Zeichen, verwendet aber die neue Schrift.
+* *Fehlende Schriften:* Nicht eingebettete Schriften werden eingebettet, wenn ein PDF-Standard es verlangt. Dafür dient eine ähnliche mitgelieferte Schrift (z. B. Arimo für Arial). Schriften ohne metrisch kompatiblen Ersatz (z. B. Calibri) sehen danach etwas anders aus. Symbolschriften (Symbol, Wingdings, ...), ungewöhnliche Schriften und Zeichen, die der Ersatz nicht hat (z. B. Chinesisch), lassen sich nicht ersetzen; das Programm meldet sie und lässt das Dokument unverändert.
+* *Eigene Schriften:* *Schriften > Schriften verwalten...* importiert TrueType-Dateien (`.ttf`), die dann wie die mitgelieferten verwendet werden können. Schriften mit PostScript-Konturen (OpenType/CFF), Schriftsammlungen (`.ttc`) und Schriften, die das Einbetten verbieten, sind nicht verwendbar. Fehlen einer Schrift Zeichen des Textes, wird sie mit einer Liste der fehlenden Zeichen abgelehnt.
+* *Duplikate zusammenführen:* Mehrfach vorhandene Schriften, z. B. eine Kopie je Seite, werden zusammengeführt, um die Datei zu verkleinern. Schriften, die sich so unterscheiden, dass der Text sich ändern würde, werden nicht zusammengeführt.
+* Die mitgelieferten Schriften Arimo, Tinos und Cousine stehen unter der Apache License 2.0.
 
 === Kennwörter merken
 
@@ -131,10 +139,7 @@ Das PDF in einzelne Dokumente exportieren.
 === Sprache der Oberfläche
 
 Das Menü _Optionen > Sprache_ stellt die Sprache der Oberfläche ein: die Systemvorgabe oder eine der mitgelieferten Sprachen (derzeit Englisch und Deutsch). +
-Nach einer Änderung fragt das Programm, ob es sofort neu gestartet werden soll. Beim Neustart wird ein geladenes Dokument samt ungeschriebenen Änderungen übernommen. +
-Die Kommandozeile verwendet dieselbe Sprache. Mit der Systemeigenschaft `jpdftool.lang` (z. B. `-Djpdftool.lang=en`) lässt sie sich für einen Aufruf festlegen.
-
-*Weitere Sprachen:* Legen Sie die Datei `messages_<Code>.properties` (UTF-8) im Ordner `src/main/resources` an, übersetzen Sie alle Schlüssel von `messages.properties` und tragen Sie den Code in den Schlüssel `lang.available` ein. Der Test `I18nTest` prüft, dass keine Schlüssel fehlen und die Platzhalter übereinstimmen. Für das Handbuch fügen Sie `README.<Code>.adoc` hinzu, daraus entsteht `manual_<Code>.pdf`.
+Nach einer Änderung fragt das Programm, ob es sofort neu gestartet werden soll. Beim Neustart wird ein geladenes Dokument samt ungeschriebenen Änderungen übernommen.
 
 === „Look-And-Feel“ wechseln
 
@@ -162,14 +167,17 @@ Unter *Linux* oder *macOS* starten Sie die Anwendung zum Beispiel so:
 
 [source%unbreakable,console]
 ----
-java -cp "$(printf %s: lib/*.jar)" com.bw.jPdfTool.Main
+java -cp "$(printf %s: lib/*.jar)" com.bw.pdfixit.Main
 ----
 
 Dieser Befehl nimmt einfach alle JARs aus dem Ordner `lib` in den Klassenpfad auf.
-Die Hauptklasse ist `com.bw.jPdfTool.Main`.
+Die Hauptklasse ist `com.bw.pdfixit.Main`.
 Ohne Argumente startet sie die *grafische Oberfläche (GUI)*. +
-Mit reinen Dateinamen (ohne Optionen) werden diese Dateien in der GUI geöffnet, z. B. lädt `jPdfTool.exe a.pdf b.pdf` die Datei `a.pdf` und hängt `b.pdf` an.
+Mit reinen Dateinamen (ohne Optionen) werden diese Dateien in der GUI geöffnet, z. B. lädt `PDFixit.exe a.pdf b.pdf` die Datei `a.pdf` und hängt `b.pdf` an.
 
+<<<
+
+[[cli]]
 == Kommandozeile (CLI)
 
 Wenn Sie das Werkzeug aus einer *CI/CD-Pipeline* oder einem Skript aufrufen möchten, steht die Kommandozeile zur Verfügung. +
@@ -184,12 +192,53 @@ Die Hilfe der Kommandozeile zeigen Sie so an:
 
 [source%unbreakable,console]
 ----
-java -cp "$(printf %s: lib/*.jar)" com.bw.jPdfTool.Main -h
+java -cp "$(printf %s: lib/*.jar)" com.bw.pdfixit.Main -h
 ----
 
-Mit `--debug` erscheinen Debug-Ausgaben und Stacktraces. Die Option funktioniert auch zusammen mit Dateinamen, um die Oberfläche im Debug-Modus zu starten (für Oberfläche oder exe können Sie auch die Systemeigenschaft `jpdftool.debug=true` setzen).
+Mit `--debug` erscheinen Debug-Ausgaben und Stacktraces. Die Option funktioniert auch zusammen mit Dateinamen, um die Oberfläche im Debug-Modus zu starten (für Oberfläche oder exe können Sie auch die Systemeigenschaft `pdfixit.debug=true` setzen).
 
 <<<
+
+=== Kommandozeilenoptionen
+
+Die Optionen der Kommandozeile, nach Aufgaben geordnet. Wie das Werkzeug von der Kommandozeile gestartet wird, steht unter <<cli,Kommandozeile (CLI)>>. Optionen mit einem Wert werden als `--option <wert>` geschrieben; Dateinamen mit Leerzeichen müssen in Anführungszeichen stehen.
+
+[cols="2,3,4"]
+|===
+|Aufgabe |Option |Bedeutung
+
+|Schwärzen
+|`--redactText <regex>`
+|Entfernt Text, der zum regulären Ausdruck passt. Kann mehrfach angegeben werden.
+
+|Schwärzen
+|`--redactArea <Seite>:<x>,<y>,<Breite>,<Höhe>`
+|Entfernt einen rechteckigen Bereich. Die Werte sind in Punkt (1/72 Zoll) von der linken oberen Seitenecke angegeben, z. B. `--redactArea 1:50,100,200,20`. Kann mehrfach angegeben werden.
+
+|E-Rechnung
+|`--extractInvoice <xml-Datei>`
+|Speichert das Rechnungs-XML des Dokuments in einer Datei.
+
+|E-Rechnung
+|`--attachInvoice <xml-Datei>`
+|Hängt das Rechnungs-XML an das Dokument an.
+
+|E-Rechnung
+|`--removeInvoice`
+|Entfernt die Rechnung. Nötig, um ein Dokument mit Rechnung zu schwärzen, da die Rechnungsdaten nicht geschwärzt würden.
+
+|E-Rechnung
+|`--validateInvoice`
+|Prüft, ob die entstehende Datei eine gültige E-Rechnung ist.
+
+|PDF-Standard
+|`--validatePdfa`
+|Prüft, ob die entstehende Datei ihrem PDF/A-Standard entspricht.
+
+|Sprache
+|`-Dpdfixit.lang=en`
+|Legt die Sprache (`en`, `de`) für einen Aufruf fest. Es ist eine Java-Systemeigenschaft und steht vor dem Programmnamen.
+|===
 
 === Exit-Codes
 
@@ -225,14 +274,83 @@ Fragen Sie gerne nach, wenn Sie eine bestimmte Funktion brauchen.
 Da das Werkzeug für die ganze Arbeit *PDFBox* verwendet, gibt es für Umgebungen ohne Display einige Besonderheiten:
 
 * *Keine GUI für die Kommandozeile:* +
-  Bei Verwendung der Kommandozeile wird die Oberfläche nicht erzeugt, sie sollte also auf einem System ohne Display (Server) laufen.
+Bei Verwendung der Kommandozeile wird die Oberfläche nicht erzeugt, sie sollte also auf einem System ohne Display (Server) laufen.
 * *AWT-Abhängigkeit:* +
-  PDFBox verwendet intern einige Klassen des *Abstract Window Toolkit (AWT)*. Diese setzen unter Umständen eine *vollständige JRE* voraus, selbst wenn die Anwendung „unsichtbar“ ohne physisches Display läuft. +
-  *Risiko bei rein headless-fähiger JRE:* Eine _rein_ headless-fähige JRE kann beim Erzeugen einer AWT-Klasse einen Fehler auslösen. Die Kommandozeile lässt sich zwar auf einem System ohne Display verwenden, eine ausdrücklich _rein_ headless konfigurierte JRE kann aber Probleme machen.
+PDFBox verwendet intern einige Klassen des *Abstract Window Toolkit (AWT)*. Diese setzen unter Umständen eine *vollständige JRE* voraus, selbst wenn die Anwendung „unsichtbar“ ohne physisches Display läuft. +
+*Risiko bei rein headless-fähiger JRE:* Eine _rein_ headless-fähige JRE kann beim Erzeugen einer AWT-Klasse einen Fehler auslösen. Die Kommandozeile lässt sich zwar auf einem System ohne Display verwenden, eine ausdrücklich _rein_ headless konfigurierte JRE kann aber Probleme machen.
 
 *Empfehlung:* Probieren Sie es aus. Der Erfolg hängt von der verwendeten headless-JRE ab.
 
-== Abhängigkeiten
+
+[[appendix-pdf-standards]]
+== Anhang: PDF-Standards
+
+Ein PDF-Standard ist eine Vereinbarung darüber, was ein PDF enthalten darf, damit es überall und lange gleich funktioniert. Das Programm kann die folgenden setzen und, soweit einfach, reparieren:
+
+[cols="1,2,4"]
+|===
+|Standard |Zweck |Besonderheiten
+
+|PDF/A-1b
+|Archivierung (älteste)
+|Sieht überall gleich aus. Keine Transparenz, keine Anhänge (eine E-Rechnung geht verloren), keine Komprimierung der Dateistruktur. Prüfbar.
+
+|PDF/A-1a
+|Archivierung
+|Wie 1b, dazu eine Struktur für Screenreader. Das Programm kann diese Struktur nicht erzeugen; die Prüfung sagt, was fehlt.
+
+|PDF/A-2b
+|Archivierung
+|Wie 1b, erlaubt aber Transparenz und kleinere Dateien. Keine Anhänge außer PDF/A-Dateien (eine E-Rechnung geht verloren).
+
+|PDF/A-2u
+|Archivierung
+|Wie 2b, dazu zuverlässiges Kopieren des Textes. Das Programm kann die nötigen Tabellen nicht für alle Schriften erzeugen; die Prüfung sagt es.
+
+|PDF/A-2a
+|Archivierung
+|Wie 2u, dazu eine Struktur für Screenreader (vom Programm nicht erzeugbar).
+
+|PDF/A-3b
+|Archivierung, E-Rechnungen
+|Wie 2b, aber beliebige Dateien dürfen angehängt sein. Wird für E-Rechnungen (ZUGFeRD / Factur-X) verwendet.
+
+|PDF/A-3u, PDF/A-3a
+|Archivierung, E-Rechnungen
+|Wie 3b, dazu zuverlässiges Kopieren des Textes (u) bzw. eine Struktur für Screenreader (a).
+
+|PDF/A-4
+|Archivierung (neueste)
+|Beruht auf einer neueren PDF-Version. Vereinfachte Stufen.
+
+|PDF/A-4e
+|Archivierung
+|Wie 4, auch für 3D- und technische Inhalte.
+
+|PDF/A-4f
+|Archivierung
+|Wie 4, Anhänge sind erlaubt.
+
+|PDF/X-1a, X-3, X-4
+|Austausch von Druckdaten
+|Farben und Seitenrahmen müssen festgelegt sein. Das Programm setzt Informationen, Trim-Box, sRGB-Ausgabeintent und Schriften. X-4 erlaubt Transparenz. Nicht prüfbar.
+
+|PDF/UA-1
+|Barrierefreiheit
+|Von Screenreadern lesbar. Das Programm setzt Sprache, Titelanzeige und Tab-Reihenfolge, kann aber die Struktur nicht erzeugen. Nicht prüfbar.
+
+|PDF/E-1
+|Technische Dokumente
+|Austausch technischer Dokumente. Nur deklariert. Nicht prüfbar.
+
+|PDF/VT-1
+|Druck mit variablen Daten
+|Z. B. Serienbriefe. Nur deklariert. Nicht prüfbar.
+|===
+
+Im Zweifel: *PDF/A-3b* für E-Rechnungen und *PDF/A-2b* für reine Archivierung.
+
+== Anhang: Abhängigkeiten
 
 Die vom Werkzeug verwendeten Bibliotheken und Schriften (die Versionen stehen in `build.gradle`). Der Code benötigt Java 17 oder neuer.
 
@@ -266,7 +384,7 @@ Die vom Werkzeug verwendeten Bibliotheken und Schriften (die Versionen stehen in
 
 |https://github.com/FasterXML/jackson[Jackson] (`jackson-databind`)
 |JSON
-|Speichert die Verkäufer- und Käufervorlagen in `~/.jPdfTool/parties.json`. Die Version ist die von Mustang verwendete.
+|Speichert die Verkäufer- und Käufervorlagen in `~/.pdfixit/parties.json`. Die Version ist die von Mustang verwendete.
 
 |https://www.formdev.com/flatlaf/[FlatLaf] (`flatlaf`, `flatlaf-fonts-roboto`)
 |Benutzeroberfläche
