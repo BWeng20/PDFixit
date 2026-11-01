@@ -101,7 +101,7 @@ Viele Firmen und Behörden verlangen PDFs, die über Jahre lesbar bleiben (Archi
 * *Standard erhalten:* Ein Dokument, das einem Standard folgt, wird vor Änderungen geschützt, die ihn verletzen würden. Funktionen wie Kennwörter, Aufteilen oder das Anhängen von Dokumenten, die dem Standard nicht folgen, sind dann deaktiviert. Hat ein geladenes Dokument Mängel, die eine Reparatur beheben kann, fragt das Programm, bevor es etwas ändert.
 * *Rechnungen:* Das Anhängen einer Rechnung erfordert PDF/A-3. Hat das Dokument einen anderen Standard, fragt das Programm, ob umgestellt werden darf.
 * *Komprimierung:* PDF/A-1 verbietet Komprimierung. Das Programm schaltet die Option *Komprimierung* dann aus und teilt das mit.
-* *Standard entfernen:* Das Dokument ist danach ein gewöhnliches PDF. Eine E-Rechnung ist keine gültige E-Rechnung mehr.
+* *Standard entfernen:* Wenn "**keiner**" gesetzt wird, ist das Dokument danach ein gewöhnliches PDF. Eine E-Rechnung ist dadurch keine gültige E-Rechnung mehr.
 * Die Dokumentinformationen (Titel, Autor, ...) stehen an zwei Stellen in der Datei, da die Archivierungsstandards verlangen, dass beide gleich sind. Das Programm schreibt beide.
 
 === Schriften
@@ -201,44 +201,137 @@ Mit `--debug` erscheinen Debug-Ausgaben und Stacktraces. Die Option funktioniert
 
 === Kommandozeilenoptionen
 
-Die Optionen der Kommandozeile, nach Aufgaben geordnet. Wie das Werkzeug von der Kommandozeile gestartet wird, steht unter <<cli,Kommandozeile (CLI)>>. Optionen mit einem Wert werden als `--option <wert>` geschrieben; Dateinamen mit Leerzeichen müssen in Anführungszeichen stehen.
+Die Optionen der Kommandozeile, nach Aufgaben geordnet. Wie das Werkzeug von der Kommandozeile gestartet wird, steht unter <<cli,Kommandozeile (CLI)>>. Optionen mit einem Wert werden als `--option <wert>` geschrieben; Dateinamen mit Leerzeichen und Kennwörter mit Sonderzeichen müssen in Anführungszeichen stehen. Jede Option hat eine Kurzform, die stattdessen verwendet werden kann (z. B. `-s` für `--split`).
 
-[cols="2,3,4"]
+*Dateien:* Alle angegebenen PDF-Dateien werden geladen; die erste ist die Grundlage, die anderen werden angehängt (siehe `--merge` für eine andere Art). Das Ergebnis wird in die mit `--out` angegebene Datei geschrieben. Ohne `--out` und ohne weitere Optionen werden die Dateien stattdessen im Fenster geöffnet.
+
+[cols="2,2,5"]
 |===
-|Aufgabe |Option |Bedeutung
+|Option |Kurz |Bedeutung
 
-|Schwärzen
+3+^|*Dateien und Seiten*
+
+|`--out <Datei>`
+|`-out`
+|Die Datei, in die das Ergebnis geschrieben wird.
+
+|`--merge <start>-<anzahl>-<überspringen>`
+|`-m`
+|Mischt die Seiten weiterer Dateien in die erste, statt sie anzuhängen. `5-2-3` beginnt vor Seite 5 der ersten Datei, fügt 2 Seiten der nächsten Datei ein, überspringt 3 Seiten, fügt die nächsten 2 ein usw., bis alle Seiten eingefügt sind.
+
+|`--split <Seiten pro Datei>`
+|`-s`
+|Teilt das Ergebnis in mehrere Dateien mit der angegebenen Seitenzahl. Die Namen werden um eine Nummer erweitert.
+
+3+^|*Kennwörter und Berechtigungen*
+
+|`--originalpassword <Kennwort>`
+|`-pw`
+|Das Kennwort zum Öffnen der angegebenen Datei, falls sie geschützt ist.
+
+|`--userpassword <Kennwort>`
+|`-upw`
+|Benutzerkennwort des Ergebnisses: nötig, um es zu öffnen.
+
+|`--ownerpassword <Kennwort>`
+|`-opw`
+|Besitzerkennwort des Ergebnisses: nötig, um die Berechtigungen zu ändern. Die folgenden Berechtigungen wirken nur, wenn es gesetzt ist.
+
+3+^|*Berechtigungen* (nur wirksam, wenn ein Besitzerkennwort gesetzt ist; ohne Angabe ist nichts erlaubt; `--no-canPrint` usw. schalten es ausdrücklich aus)
+
+|`--canPrint`
+|`-cpt`
+|Drucken erlauben.
+
+|`--canModify`
+|`-cmd`
+|Ändern des Dokuments erlauben.
+
+|`--canExtractContent`
+|`-cec`
+|Kopieren von Text und Bildern erlauben.
+
+|`--canExtractForAccessibility`
+|`-cea`
+|Kopieren von Inhalt für Screenreader erlauben.
+
+|`--canFillInForm`
+|`-cff`
+|Ausfüllen von Formularen erlauben.
+
+|`--canAssemble`
+|`-cas`
+|Einfügen, Entfernen und Drehen von Seiten erlauben.
+
+|`--canModifyAnnotations`
+|`-cma`
+|Ändern von Anmerkungen (Kommentare, Signieren) erlauben.
+
+3+^|*Signieren*
+
+|`--certificate <p12-Datei>`
+|`-cert`
+|Signiert das Ergebnis mit dem Zertifikat der Datei.
+
+|`--certificatePassword <Kennwort>`
+|`-cpw`
+|Das Kennwort der Zertifikatsdatei.
+
+3+^|*Schwärzen*
+
 |`--redactText <regex>`
+|`-rt`
 |Entfernt Text, der zum regulären Ausdruck passt. Kann mehrfach angegeben werden.
 
-|Schwärzen
 |`--redactArea <Seite>:<x>,<y>,<Breite>,<Höhe>`
+|`-ra`
 |Entfernt einen rechteckigen Bereich. Die Werte sind in Punkt (1/72 Zoll) von der linken oberen Seitenecke angegeben, z. B. `--redactArea 1:50,100,200,20`. Kann mehrfach angegeben werden.
 
-|E-Rechnung
+3+^|*E-Rechnung*
+
 |`--extractInvoice <xml-Datei>`
+|`-ei`
 |Speichert das Rechnungs-XML des Dokuments in einer Datei.
 
-|E-Rechnung
 |`--attachInvoice <xml-Datei>`
+|`-ai`
 |Hängt das Rechnungs-XML an das Dokument an.
 
-|E-Rechnung
 |`--removeInvoice`
+|`-ri`
 |Entfernt die Rechnung. Nötig, um ein Dokument mit Rechnung zu schwärzen, da die Rechnungsdaten nicht geschwärzt würden.
 
-|E-Rechnung
 |`--validateInvoice`
+|`-vi`
 |Prüft, ob die entstehende Datei eine gültige E-Rechnung ist.
 
-|PDF-Standard
-|`--validatePdfa`
-|Prüft, ob die entstehende Datei ihrem PDF/A-Standard entspricht.
+3+^|*Prüfungen und Sonstiges*
 
-|Sprache
+|`--validatePdfa`
+|`-vp`
+|Prüft, ob die entstehende Datei dem PDF-Standard (PDF/A) entspricht, den sie angibt.
+
+|`--debug`
+|
+|Zeigt ausführliche Meldungen zur Fehlersuche.
+
+|`--help`
+|`-h`
+|Zeigt den Hilfetext mit allen Optionen.
+
 |`-Dpdfixit.lang=en`
+|
 |Legt die Sprache (`en`, `de`) für einen Aufruf fest. Es ist eine Java-Systemeigenschaft und steht vor dem Programmnamen.
 |===
+
+*Beispiele* (hinter dem Startbefehl):
+
+* Zwei Dateien zusammenführen und mit einem Kennwort schützen: `--out ergebnis.pdf --userpassword geheim a.pdf b.pdf`
+* Eine Datei in Teile zu 10 Seiten aufteilen: `--out teil.pdf --split 10 gross.pdf`
+* Einen Bereich auf Seite 1 schwärzen: `--out geschwaerzt.pdf --redactArea 1:50,100,200,20 in.pdf`
+* Eine Rechnung anhängen: `--out rechnung.pdf --attachInvoice rechnung.xml in.pdf`
+
+*Auf der Kommandozeile nicht verfügbar:* Umwandeln in einen PDF-Standard (nur Prüfen), Ersetzen oder Zusammenführen von Schriften, Erzeugen einer Rechnung aus Daten (nur Anhängen einer fertigen XML-Datei), Komprimierung umschalten, Seiten drehen oder entfernen.
 
 === Exit-Codes
 
@@ -281,6 +374,17 @@ PDFBox verwendet intern einige Klassen des *Abstract Window Toolkit (AWT)*. Dies
 
 *Empfehlung:* Probieren Sie es aus. Der Erfolg hängt von der verwendeten headless-JRE ab.
 
+== Lizenz
+
+ifdef::backend-pdf[]
+Dieses Projekt ist gemeinfrei (The Unlicense), siehe die Datei `LICENSE`.
+endif::[]
+ifndef::backend-pdf[]
+Dieses Projekt ist gemeinfrei (The Unlicense), siehe link:LICENSE[LICENSE].
+endif::[]
+
+
+<<<
 
 [[appendix-pdf-standards]]
 == Anhang: PDF-Standards
@@ -350,6 +454,8 @@ Ein PDF-Standard ist eine Vereinbarung darüber, was ein PDF enthalten darf, dam
 
 Im Zweifel: *PDF/A-3b* für E-Rechnungen und *PDF/A-2b* für reine Archivierung.
 
+<<<
+
 == Anhang: Abhängigkeiten
 
 Die vom Werkzeug verwendeten Bibliotheken und Schriften (die Versionen stehen in `build.gradle`). Der Code benötigt Java 17 oder neuer.
@@ -407,6 +513,3 @@ Die vom Werkzeug verwendeten Bibliotheken und Schriften (die Versionen stehen in
 |Führt die Unit-Tests aus (nur Test-Scope, nicht Teil der Anwendung).
 |===
 
-== Lizenz
-
-Dieses Projekt ist gemeinfrei, siehe link:LICENSE[LICENSE].
