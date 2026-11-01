@@ -17,7 +17,7 @@ In den folgenden Tagen habe ich – nur zum Spaß – immer weitere Funktionen i
 
 == Funktionen
 
-image:doc/Screenshot Release3.0.png[Screenshot]
+image:doc/Screenshot Release3.0_de.png[Screenshot]
 
 === PDF laden
 PDF-Dokumente einfach zum Bearbeiten importieren.
