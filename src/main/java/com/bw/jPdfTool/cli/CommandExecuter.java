@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.cli;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.invoice.EInvoice;
 import com.bw.jPdfTool.Log;
 import com.bw.jPdfTool.PdfRisk;
@@ -71,7 +72,7 @@ public class CommandExecuter {
             lw.execute();
             // The next loader resets the error, so check each file.
             if (documentProxy.error != null)
-                throw new LoadException(String.format("Failed to load '%s': %s", p,
+                throw new LoadException(I18n.t("cli.loadFailed", p,
                         documentProxy.error.replace('\n', ' ')));
         }
     }
@@ -100,7 +101,7 @@ public class CommandExecuter {
         final boolean tagged = PdfRisk.isTagged(document);
         Redactor.redact(document, regions, prefs.getDpi(), prefs.getRedactionColor());
         if (!regions.isEmpty())
-            documentProxy.reportRisks("Redaction", PdfRisk.tagsLost(tagged, null));
+            documentProxy.reportRisks(I18n.t("risk.redaction"), PdfRisk.tagsLost(tagged, null));
         return regions.size();
     }
 
@@ -204,7 +205,7 @@ public class CommandExecuter {
                 splitter.setSplitAtPage(pagePerDocument);
                 List<PDDocument> splittedDocs = splitter.split(source);
                 if (!splittedDocs.isEmpty())
-                    documentProxy.reportRisks("Split", PdfRisk.tagsLost(PdfRisk.isTagged(source), splittedDocs.get(0)));
+                    documentProxy.reportRisks(I18n.t("ui.split.risk"), PdfRisk.tagsLost(PdfRisk.isTagged(source), splittedDocs.get(0)));
                 for (PDDocument part : splittedDocs) {
                     PDDocument doc = part;
                     if (invoiceXml != null && fileCount == 0) {

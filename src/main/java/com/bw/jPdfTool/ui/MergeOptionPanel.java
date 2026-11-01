@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.ui;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.model.MergeOptions;
 
 import javax.swing.Box;
@@ -16,8 +17,8 @@ import java.awt.Insets;
 
 public class MergeOptionPanel extends JPanel {
 
-    private final JRadioButton append = new JRadioButton("Append");
-    private final JRadioButton mix = new JRadioButton("Mix");
+    private final JRadioButton append = new JRadioButton(I18n.t("merge.append"));
+    private final JRadioButton mix = new JRadioButton(I18n.t("merge.mix"));
     private final JSpinner mixerStart = new JSpinner(new SpinnerNumberModel(2, 1, 100, 1));
     private final JSpinner mixerGapSize = new JSpinner(new SpinnerNumberModel(1, 1, 20, 1));
     private final JSpinner mixerSegSize = new JSpinner(new SpinnerNumberModel(1, 1, 20, 1));
@@ -59,7 +60,7 @@ public class MergeOptionPanel extends JPanel {
         gc.gridwidth = 1;
         gc.weightx = 0;
 
-        JLabel mixerStartLabel = new JLabel("Insert before Page");
+        JLabel mixerStartLabel = new JLabel(I18n.t("merge.insertBefore"));
         mixerStartLabel.setLabelFor(mixerStart);
         add(mixerStartLabel, gc);
 
@@ -71,7 +72,7 @@ public class MergeOptionPanel extends JPanel {
 
         gc.weightx = 0;
         gc.gridx = 0;
-        JLabel mixerSegLabel = new JLabel("<html>Pages in inserted<br>Segments</html>");
+        JLabel mixerSegLabel = new JLabel(I18n.t("merge.segmentPages"));
         mixerSegLabel.setLabelFor(mixerSegSize);
         add(mixerSegLabel, gc);
 
@@ -83,7 +84,7 @@ public class MergeOptionPanel extends JPanel {
 
         gc.weightx = 0;
         gc.gridx = 0;
-        JLabel mixerGapLabel = new JLabel("<html>Number of Pages<br>between Segments</html>");
+        JLabel mixerGapLabel = new JLabel(I18n.t("merge.gapPages"));
         mixerGapLabel.setLabelFor(mixerGapSize);
         add(mixerGapLabel, gc);
 
@@ -96,7 +97,7 @@ public class MergeOptionPanel extends JPanel {
         gc.gridwidth = 2;
         mergeIconLabel.setHorizontalAlignment(JLabel.LEFT);
         mergeIconLabel.setIcon(mergeIcon);
-        mergeIconLabel.setToolTipText("<html>The inserted pages do not show the real number<br>as the inserted documents are not yet loaded.</html>");
+        mergeIconLabel.setToolTipText(I18n.t("merge.iconTip"));
         add(mergeIconLabel, gc);
 
         gc.weightx = 0;

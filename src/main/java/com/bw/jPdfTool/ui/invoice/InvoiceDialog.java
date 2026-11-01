@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.ui.invoice;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.ui.CollapsibleTextPanel;
 import com.bw.jPdfTool.ui.UI;
 
@@ -43,17 +44,6 @@ import java.util.regex.Pattern;
  */
 public class InvoiceDialog extends JDialog {
 
-    private static final Map<String, String> DOCUMENT_TYPES = Map.of(
-            "380", "Invoice",
-            "381", "Credit note",
-            "384", "Corrected invoice",
-            "389", "Self-billed invoice",
-            "326", "Partial invoice",
-            "386", "Prepayment invoice",
-            "875", "Partial construction invoice",
-            "876", "Partial final construction invoice",
-            "877", "Final construction invoice");
-
     private static final Map<String, String> PROFILES = Map.of(
             "MINIMUM", "Minimum",
             "BASICWL", "Basic WL",
@@ -69,7 +59,7 @@ public class InvoiceDialog extends JDialog {
     private final Locale locale = Locale.getDefault();
 
     private InvoiceDialog(Window owner, byte[] xml, EInvoice.Summary summary, String error) {
-        super(owner, "Invoice", Dialog.ModalityType.APPLICATION_MODAL);
+        super(owner, I18n.t("common.invoice"), Dialog.ModalityType.APPLICATION_MODAL);
         JPanel main = new JPanel(new BorderLayout(0, 12));
         main.setBorder(BorderFactory.createEmptyBorder(14, 14, 10, 14));
 
@@ -77,10 +67,10 @@ public class InvoiceDialog extends JDialog {
         // The data block follows the width of the dialog.
         center.add(summary == null ? createError(error) : createSummary(summary), BorderLayout.NORTH);
         // Without readable data, the XML is all there is: show it directly.
-        center.add(new CollapsibleTextPanel(InvoiceData.prettyXml(xml), "Show XML", "Hide XML", summary == null),
+        center.add(new CollapsibleTextPanel(InvoiceData.prettyXml(xml), I18n.t("xml.show"), I18n.t("xml.hide"), summary == null),
                 BorderLayout.CENTER);
 
-        JButton close = new JButton("Close");
+        JButton close = new JButton(I18n.t("about.close"));
         close.addActionListener(e -> dispose());
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.TRAILING, 0, 0));
         buttons.add(close);
@@ -110,7 +100,7 @@ public class InvoiceDialog extends JDialog {
             if (!hasData(summary)) {
                 // Mustang doesn't fail on XML that is no invoice, it simply finds nothing.
                 summary = null;
-                error = "The XML contains no invoice data.";
+                error = I18n.t("invoice.noData");
             }
         } catch (Exception e) {
             error = e.getMessage() == null ? e.toString() : e.getMessage();
@@ -129,7 +119,7 @@ public class InvoiceDialog extends JDialog {
     }
 
     private JComponent createError(String error) {
-        JLabel label = new JLabel("<html><b>The invoice data can't be read.</b><br>" + escape(error) + "</html>");
+        JLabel label = new JLabel(I18n.t("invoice.cannotRead", escape(error)));
         label.setIcon(UIManager.getIcon("OptionPane.warningIcon"));
         label.setIconTextGap(10);
         return label;
@@ -156,11 +146,11 @@ public class InvoiceDialog extends JDialog {
         gc.gridy++;
         gc.insets = new Insets(14, 0, 0, 0);
         panel.add(spacer(), gc);
-        addRow(panel, gc, "From", s.seller());
-        addRow(panel, gc, "To", s.buyer());
-        addRow(panel, gc, "Issue date", formatDate(s.issueDate(), locale));
-        addRow(panel, gc, "Due date", formatDate(s.dueDate(), locale));
-        addRow(panel, gc, "Reference", s.reference());
+        addRow(panel, gc, I18n.t("invoice.from"), s.seller());
+        addRow(panel, gc, I18n.t("invoice.to"), s.buyer());
+        addRow(panel, gc, I18n.t("invoice.issueDate"), formatDate(s.issueDate(), locale));
+        addRow(panel, gc, I18n.t("invoice.dueDate"), formatDate(s.dueDate(), locale));
+        addRow(panel, gc, I18n.t("invoice.reference"), s.reference());
 
         // Amounts, right aligned at the right edge of the value column.
         boolean hasNet = s.netAmount() != null;
@@ -169,8 +159,8 @@ public class InvoiceDialog extends JDialog {
             gc.gridy++;
             gc.insets = new Insets(10, 0, 4, 0);
             panel.add(spacer(), gc);
-            addAmountRow(panel, gc, "Net amount", formatAmount(s.netAmount(), s.currency(), locale), false);
-            addAmountRow(panel, gc, "VAT", formatAmount(s.taxAmount(), s.currency(), locale), false);
+            addAmountRow(panel, gc, I18n.t("invoice.netAmount"), formatAmount(s.netAmount(), s.currency(), locale), false);
+            addAmountRow(panel, gc, I18n.t("invoice.vat"), formatAmount(s.taxAmount(), s.currency(), locale), false);
             if (hasNet || hasTax) {
                 gc.gridy++;
                 gc.gridx = 1;
@@ -181,7 +171,7 @@ public class InvoiceDialog extends JDialog {
                 panel.add(rule, gc);
                 gc.fill = GridBagConstraints.NONE;
             }
-            addAmountRow(panel, gc, "Amount due", formatAmount(s.amount(), s.currency(), locale), true);
+            addAmountRow(panel, gc, I18n.t("invoice.amountDue"), formatAmount(s.amount(), s.currency(), locale), true);
         }
 
         // Payment.
@@ -189,7 +179,7 @@ public class InvoiceDialog extends JDialog {
         gc.insets = new Insets(8, 0, 0, 0);
         panel.add(spacer(), gc);
         addRow(panel, gc, "IBAN", formatIban(s.iban()));
-        addRow(panel, gc, "Payment terms", s.paymentTerms());
+        addRow(panel, gc, I18n.t("invoice.paymentTerms"), s.paymentTerms());
         return panel;
     }
 
@@ -225,7 +215,7 @@ public class InvoiceDialog extends JDialog {
         gc.weighty = 1;
         gc.anchor = GridBagConstraints.SOUTHWEST;
         if (s.profile() != null) {
-            JLabel profile = new JLabel("ZUGFeRD / Factur-X, profile " + profileName(s.profile()),
+            JLabel profile = new JLabel(I18n.t("invoice.profileLine", profileName(s.profile())),
                     SwingConstants.LEADING);
             profile.setForeground(UIManager.getColor("Label.disabledForeground"));
             head.add(profile, gc);
@@ -298,9 +288,9 @@ public class InvoiceDialog extends JDialog {
      */
     static String documentType(String code) {
         if (code == null)
-            return "Invoice";
-        String name = DOCUMENT_TYPES.get(code.trim());
-        return name == null ? "Document (type " + code + ")" : name;
+            return I18n.t("invoice.type.380");
+        String key = "invoice.type." + code.trim();
+        return I18n.has(key) ? I18n.t(key) : I18n.t("invoice.type.unknown", code);
     }
 
     /**

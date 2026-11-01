@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.toast;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.Log;
 import com.bw.jPdfTool.ui.UI;
 import com.formdev.flatlaf.ui.FlatLineBorder;
@@ -163,7 +164,7 @@ public class Toast extends JPanel {
 
         JButton openDialog = new ToastButton(UI.getIcon("openToast"));
         JButton copy = new ToastButton(UI.getIcon("copy"));
-        copy.setToolTipText("Copy the message to the clipboard");
+        copy.setToolTipText(I18n.t("toast.copy.tip"));
         copy.addActionListener(e -> copyToClipboard());
 
         JPanel actions = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 6, 0));
@@ -251,6 +252,8 @@ public class Toast extends JPanel {
 
     public void cleanUp() {
         removeAll();
+        if (animation != null)
+            animation.abort();
         if (closeTimer != null) {
             closeTimer.stop();
             closeTimer = null;
@@ -269,7 +272,7 @@ public class Toast extends JPanel {
                         t = toast;
                     else
                         t = (Toast) SwingUtilities.getAncestorOfClass(Toast.class, component);
-                    if (t != null) {
+                    if (t != null && t.closeTimer != null) {
                         if (id == MouseEvent.MOUSE_ENTERED) {
                             t.closeTimer.stop();
                         } else {

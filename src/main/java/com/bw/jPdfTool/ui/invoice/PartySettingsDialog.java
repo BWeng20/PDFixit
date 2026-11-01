@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.ui.invoice;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.Log;
 import com.bw.jPdfTool.invoice.InvoiceData;
 import com.bw.jPdfTool.invoice.Party;
@@ -49,7 +50,9 @@ import java.util.Map;
  */
 public class PartySettingsDialog extends JDialog {
 
-    private static final String TITLE = "Invoice Parties";
+    private static String title() {
+        return I18n.t("party.title");
+    }
 
     private final Path file;
     /**
@@ -65,8 +68,8 @@ public class PartySettingsDialog extends JDialog {
     private final JList<Party> list = new JList<>(model);
     private final Map<Role, JCheckBox> roleBoxes = new EnumMap<>(Role.class);
     private final PartyPanel editor;
-    private final JButton remove = new JButton("Remove");
-    private final JButton copy = new JButton("Create Copy");
+    private final JButton remove = new JButton(I18n.t("redact.remove"));
+    private final JButton copy = new JButton(I18n.t("party.copy"));
     /**
      * The entries as loaded, to reset an entry when a copy is made from its edited values.
      */
@@ -78,7 +81,7 @@ public class PartySettingsDialog extends JDialog {
     private boolean updating;
 
     private PartySettingsDialog(Window owner, Path file, List<Party> parties) {
-        super(owner, TITLE, Dialog.ModalityType.APPLICATION_MODAL);
+        super(owner, title(), Dialog.ModalityType.APPLICATION_MODAL);
         this.file = file;
         // Work on copies, "Cancel" leaves the presets untouched.
         for (Party s : parties) {
@@ -89,8 +92,8 @@ public class PartySettingsDialog extends JDialog {
 
         JPanel roles = new JPanel(new FlowLayout(FlowLayout.LEADING, 0, 0));
         for (Role role : Role.values()) {
-            JCheckBox box = new JCheckBox(role.title);
-            box.setToolTipText("Offer this entry in the " + role.title.toLowerCase() + " presets of the invoice editor.");
+            JCheckBox box = new JCheckBox(role.title());
+            box.setToolTipText(I18n.t("party.offer." + role.name().toLowerCase()));
             box.addActionListener(e -> {
                 Party p = list.getSelectedValue();
                 if (updating || p == null)
@@ -105,7 +108,7 @@ public class PartySettingsDialog extends JDialog {
             roles.add(box);
         }
         // Seller form: it has all fields, a buyer simply doesn't use contact and bank account.
-        editor = new PartyPanel(true, "Use as", roles, true);
+        editor = new PartyPanel(true, I18n.t("party.useAs"), roles, true);
 
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         list.setCellRenderer(new DefaultListCellRenderer() {
@@ -129,10 +132,10 @@ public class PartySettingsDialog extends JDialog {
             list.repaint();
         });
 
-        JButton add = new JButton("Add");
+        JButton add = new JButton(I18n.t("party.add"));
         add.addActionListener(e -> addParty());
         remove.addActionListener(e -> removeParty());
-        copy.setToolTipText("Adds a copy with the current values and resets this entry to its saved values.");
+        copy.setToolTipText(I18n.t("party.copy.tip"));
         copy.addActionListener(e -> createCopy());
         JPanel listButtons = new JPanel(new GridLayout(1, 3, 6, 0));
         listButtons.add(add);
@@ -153,11 +156,11 @@ public class PartySettingsDialog extends JDialog {
         editorPanel.add(editor, BorderLayout.NORTH);
         center.add(editorPanel, BorderLayout.CENTER);
 
-        JLabel location = new JLabel("Stored in " + file.toAbsolutePath());
+        JLabel location = new JLabel(I18n.t("party.storedIn", file.toAbsolutePath()));
         location.setForeground(UIManager.getColor("Label.disabledForeground"));
-        JButton save = new JButton("Save");
+        JButton save = new JButton(I18n.t("common.save"));
         save.addActionListener(e -> save());
-        JButton cancel = new JButton("Cancel");
+        JButton cancel = new JButton(I18n.t("common.cancel"));
         cancel.addActionListener(e -> cancel());
         getRootPane().setDefaultButton(save);
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.TRAILING, 6, 0));
@@ -216,9 +219,8 @@ public class PartySettingsDialog extends JDialog {
         } catch (Exception e) {
             Log.exception(e);
             JOptionPane.showMessageDialog(owner,
-                    "<html><b>The parties can't be read.</b><br>" + file + "<br><i>" + e.getMessage()
-                            + "</i><br><br>Saving replaces the file.</html>",
-                    TITLE, JOptionPane.WARNING_MESSAGE);
+                    I18n.t("party.cannotRead", file, e.getMessage()),
+                    title(), JOptionPane.WARNING_MESSAGE);
             parties = new ArrayList<>();
         }
         PartySettingsDialog dialog = new PartySettingsDialog(owner, file, parties);
@@ -235,7 +237,7 @@ public class PartySettingsDialog extends JDialog {
     static String displayName(Party p) {
         if (p == null)
             return "";
-        return p.name == null || p.name.isBlank() ? "(no name)" : p.displayName();
+        return p.name == null || p.name.isBlank() ? I18n.t("party.noName") : p.displayName();
     }
 
     private void applyProposal(Party proposal, Party hint, Role role) {
@@ -278,10 +280,10 @@ public class PartySettingsDialog extends JDialog {
         if (p == null || (p.asSeller && p.asBuyer))
             return "";
         if (p.asSeller)
-            return "  (seller)";
+            return "  " + I18n.t("party.suffix.seller");
         if (p.asBuyer)
-            return "  (buyer)";
-        return "  (not used)";
+            return "  " + I18n.t("party.suffix.buyer");
+        return "  " + I18n.t("party.suffix.none");
     }
 
     private void selectionChanged() {
@@ -314,7 +316,7 @@ public class PartySettingsDialog extends JDialog {
         int idx = list.getSelectedIndex();
         if (idx < 0)
             return;
-        int answer = JOptionPane.showConfirmDialog(this, "Remove \"" + displayName(model.get(idx)) + "\"?",
+        int answer = JOptionPane.showConfirmDialog(this, I18n.t("party.removeQuestion", displayName(model.get(idx))),
                 getTitle(), JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
         if (answer != JOptionPane.YES_OPTION)
             return;
@@ -329,7 +331,7 @@ public class PartySettingsDialog extends JDialog {
         String duplicate = PartyPresets.findDuplicate(Collections.list(model.elements()));
         if (duplicate != null) {
             JOptionPane.showMessageDialog(this,
-                    "<html>There are several entries \"" + duplicate + "\".<br>Give them different labels.</html>",
+                    I18n.t("party.duplicate", duplicate),
                     getTitle(), JOptionPane.WARNING_MESSAGE);
             return;
         }
@@ -341,14 +343,14 @@ public class PartySettingsDialog extends JDialog {
         } catch (Exception e) {
             Log.exception(e);
             JOptionPane.showMessageDialog(this,
-                    "<html><b>The parties can't be saved.</b><br>" + file + "<br><i>" + e.getMessage() + "</i></html>",
+                    I18n.t("party.cannotSave", file, e.getMessage()),
                     getTitle(), JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void cancel() {
         if (dirty) {
-            int answer = JOptionPane.showConfirmDialog(this, "Discard the changes?", getTitle(),
+            int answer = JOptionPane.showConfirmDialog(this, I18n.t("party.discard"), getTitle(),
                     JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
             if (answer != JOptionPane.YES_OPTION)
                 return;

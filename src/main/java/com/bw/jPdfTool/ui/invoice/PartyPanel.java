@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.ui.invoice;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.invoice.InvoiceData;
 import com.bw.jPdfTool.invoice.Party;
 
@@ -51,41 +52,41 @@ class PartyPanel extends FormPanel {
         if (header != null)
             row(headerCaption, header);
         if (withLabel) {
-            labelField = field(null, 14, "Tells apart several versions of the same party, e.g. \"Berlin branch\".",
+            labelField = field(null, 14, I18n.t("party.label.tip"),
                     p -> p.label, (p, v) -> p.label = v);
-            row("Label", labelField);
+            row(I18n.t("party.label"), labelField);
         }
         InvoiceData.Field address = seller ? InvoiceData.Field.SELLER_ADDRESS : InvoiceData.Field.BUYER_DETAILS;
         InvoiceData.Field details = seller ? null : InvoiceData.Field.BUYER_DETAILS;
         InvoiceData.Field email = seller ? InvoiceData.Field.SELLER_EMAIL : InvoiceData.Field.BUYER_DETAILS;
 
         nameField = field(null, 14, null, p -> p.name, (p, v) -> p.name = v);
-        row("Name", nameField);
-        row("Street", field(address, 14, null, p -> p.street, (p, v) -> p.street = v));
-        row("Postcode", field(address, 6, null, p -> p.zip, (p, v) -> p.zip = v),
-                "City", field(address, 10, null, p -> p.city, (p, v) -> p.city = v));
-        row("Country", field(details, 3, "Two letter code (ISO 3166-1), e.g. DE, AT, FR.", p -> p.country, (p, v) -> p.country = v),
-                "VAT ID", field(details, 10, null, p -> p.vatId, (p, v) -> p.vatId = v));
+        row(I18n.t("party.name"), nameField);
+        row(I18n.t("party.street"), field(address, 14, null, p -> p.street, (p, v) -> p.street = v));
+        row(I18n.t("party.postcode"), field(address, 6, null, p -> p.zip, (p, v) -> p.zip = v),
+                I18n.t("party.city"), field(address, 10, null, p -> p.city, (p, v) -> p.city = v));
+        row(I18n.t("party.country"), field(details, 3, I18n.t("party.country.tip"), p -> p.country, (p, v) -> p.country = v),
+                I18n.t("party.vatId"), field(details, 10, null, p -> p.vatId, (p, v) -> p.vatId = v));
         if (seller) {
-            row("Tax number", field(null, 10, "Tax number (\"Steuernummer\"), needed if there is no VAT ID.",
+            row(I18n.t("party.taxNumber"), field(null, 10, I18n.t("party.taxNumber.tip"),
                             p -> p.taxId, (p, v) -> p.taxId = v),
-                    "E-mail", field(email, 10, null, p -> p.email, (p, v) -> p.email = v));
-            row("Contact", field(InvoiceData.Field.SELLER_CONTACT, 10, null, p -> p.contactName, (p, v) -> p.contactName = v),
-                    "Phone", field(InvoiceData.Field.SELLER_CONTACT, 10, null, p -> p.phone, (p, v) -> p.phone = v));
-            section("Bank account");
+                    I18n.t("party.email"), field(email, 10, null, p -> p.email, (p, v) -> p.email = v));
+            row(I18n.t("party.contact"), field(InvoiceData.Field.SELLER_CONTACT, 10, null, p -> p.contactName, (p, v) -> p.contactName = v),
+                    I18n.t("party.phone"), field(InvoiceData.Field.SELLER_CONTACT, 10, null, p -> p.phone, (p, v) -> p.phone = v));
+            section(I18n.t("party.bankAccount"));
             row("IBAN", field(InvoiceData.Field.BANK_ACCOUNT, 14, null,
                             p -> p.iban == null ? null : InvoiceDialog.formatIban(p.iban), (p, v) -> p.iban = v),
-                    "BIC", field(InvoiceData.Field.ACCOUNT_DETAILS, 8, null, p -> p.bic, (p, v) -> p.bic = v));
-            row("Account holder", field(InvoiceData.Field.ACCOUNT_DETAILS, 14, null,
+                    I18n.t("party.bic"), field(InvoiceData.Field.ACCOUNT_DETAILS, 8, null, p -> p.bic, (p, v) -> p.bic = v));
+            row(I18n.t("party.accountHolder"), field(InvoiceData.Field.ACCOUNT_DETAILS, 14, null,
                     p -> p.accountHolder, (p, v) -> p.accountHolder = v));
         } else {
-            row("E-mail", field(email, 14, null, p -> p.email, (p, v) -> p.email = v));
+            row(I18n.t("party.email"), field(email, 14, null, p -> p.email, (p, v) -> p.email = v));
         }
         if (withLabel) {
-            section("Payment as buyer");
-            row("Terms", field(null, 14, "Default payment terms of a new invoice to this buyer.",
+            section(I18n.t("party.paymentAsBuyer"));
+            row(I18n.t("party.terms"), field(null, 14, I18n.t("party.terms.tip"),
                     p -> p.paymentTerms, (p, v) -> p.paymentTerms = v));
-            row("Days until due", field(null, 6, "Days after the invoice date: sets the due date of a new invoice to this buyer.",
+            row(I18n.t("party.daysUntilDue"), field(null, 6, I18n.t("party.daysUntilDue.tip"),
                     p -> p.paymentDays == null ? null : String.valueOf(p.paymentDays), (p, v) -> p.paymentDays = parseDays(v)));
         }
         setParty(null);
@@ -169,7 +170,7 @@ class PartyPanel extends FormPanel {
         for (Binding b : bindings) {
             boolean ok = b.group == null || supported.test(b.group);
             b.field.setEnabled(party != null && ok);
-            b.field.setToolTipText(ok ? b.toolTip : "Not part of the profile of this invoice, the value is not written.");
+            b.field.setToolTipText(ok ? b.toolTip : I18n.t("party.notInProfile"));
         }
     }
 

@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.cli;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.Log;
 import com.bw.jPdfTool.PdfRisk;
 import com.bw.jPdfTool.model.DocumentProxy;
@@ -44,9 +45,9 @@ public class CliPdfLoader implements PdfLoadWorker {
             documentProxy.error = null;
             documentProxy.reportRisks(file.getFileName().toString(), PdfRisk.inspect(document, data));
         } catch (InvalidPasswordException ep) {
-            documentProxy.error = "File is encrypted and owner password\ndoesn't match";
+            documentProxy.error = I18n.t("load.wrongPassword");
         } catch (NoSuchFileException fe) {
-            documentProxy.error = String.format("File '%s' does not exist", file.getFileName());
+            documentProxy.error = I18n.t("load.notExist", file.getFileName());
         } catch (Exception e) {
             documentProxy.error = e.getMessage();
         }

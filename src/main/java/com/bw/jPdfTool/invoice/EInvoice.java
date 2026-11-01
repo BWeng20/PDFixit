@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.invoice;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.fonts.FontEmbedException;
 import com.bw.jPdfTool.Log;
 import com.bw.jPdfTool.PdfStandard;
@@ -355,8 +356,8 @@ public final class EInvoice {
             // Warnings don't make a document invalid, so they only hide the real reason.
             Set<String> errors = new LinkedHashSet<>(v.messages());
             errors.removeIf(m -> m.startsWith(ESeverity.warning.toString()));
-            String reason = errors.isEmpty() ? "see validation report" : String.join("\n", errors);
-            throw new NotConformException("The document is not conform to PDF/A-3 / EN 16931:\n" + reason);
+            String reason = errors.isEmpty() ? I18n.t("einvoice.seeReport") : String.join("\n", errors);
+            throw new NotConformException(I18n.t("einvoice.notConform", reason));
         }
         return result;
     }

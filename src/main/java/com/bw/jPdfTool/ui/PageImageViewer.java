@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.ui;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.Log;
 import com.bw.jPdfTool.Preferences;
 import com.bw.jPdfTool.model.Page;
@@ -38,22 +39,17 @@ public final class PageImageViewer extends JPanel {
     private boolean showCombined = false;
     private Page page;
     private BufferedImage combinedImage;
-    private final JCheckBox combined = new JCheckBox("Combined");
+    private final JCheckBox combined = new JCheckBox(I18n.t("images.combined"));
 
-    private final JButton saveAll = new JButton("Save all");
-    private final JButton saveOne = new JButton("Save");
+    private final JButton saveAll = new JButton(I18n.t("images.saveAll"));
+    private final JButton saveOne = new JButton(I18n.t("images.save"));
 
 
     public PageImageViewer() {
         super(new BorderLayout());
 
         combined.setToolTipText(
-                "<html>" +
-                        "Tries to render all images with their native resolution in one image.<br>" +
-                        "If the images were drawn with different scales, this will lead to gaps.<br>" +
-                        "This option may be useful, if the creator split the source image into multiple parts.<br>" +
-                        "At least this should spare you some time if you want to put them together." +
-                        "</html>");
+                I18n.t("images.combined.tip"));
 
         JPanel left = new JPanel(new BorderLayout());
         left.add(resourceList, BorderLayout.CENTER);
@@ -114,7 +110,7 @@ public final class PageImageViewer extends JPanel {
                     }
                 }
             } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, "Failed to store", ex.getMessage(), JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, ex.getMessage(), I18n.t("images.storeFailed"), JOptionPane.ERROR_MESSAGE);
             }
         });
 
@@ -140,7 +136,7 @@ public final class PageImageViewer extends JPanel {
                     }
                 }
             } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, "Failed to store", ex.getMessage(), JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, ex.getMessage(), I18n.t("images.storeFailed"), JOptionPane.ERROR_MESSAGE);
             }
 
         });
@@ -200,7 +196,7 @@ public final class PageImageViewer extends JPanel {
                     image.setAlternativeText(i.error);
                     image.setImage(null);
                 } else {
-                    image.setAlternativeText("Unsupported format");
+                    image.setAlternativeText(I18n.t("images.unsupported"));
                     image.setImage(null);
                 }
                 return;
@@ -212,7 +208,7 @@ public final class PageImageViewer extends JPanel {
     private void showImage(BufferedImage bimage) {
         if (bimage == null) {
             saveOne.setEnabled(false);
-            image.setAlternativeText(imageMap.isEmpty() ? "No images" : "Select an image");
+            image.setAlternativeText(imageMap.isEmpty() ? I18n.t("images.none") : I18n.t("images.select"));
         } else {
             saveOne.setEnabled(true);
             double scalex = ((double) image.getWidth() / bimage.getWidth());
@@ -233,7 +229,7 @@ public final class PageImageViewer extends JPanel {
                     combinedImage = getCombined();
                 }
                 if (combinedImage == null)
-                    image.setAlternativeText("Operation Failed");
+                    image.setAlternativeText(I18n.t("images.failed"));
                 showImage(combinedImage);
                 image.setImageName("combined");
             } else {

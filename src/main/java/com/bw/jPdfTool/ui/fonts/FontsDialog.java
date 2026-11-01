@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.ui.fonts;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.fonts.FontSource;
 import com.bw.jPdfTool.fonts.ImportedFont;
 import com.bw.jPdfTool.fonts.ImportedFonts;
@@ -49,7 +50,9 @@ import java.util.Map;
  */
 public final class FontsDialog {
 
-    private static final String[] COLUMNS = {"Font", "Type", "Embedded", "Pages"};
+    private static String[] columns() {
+        return new String[]{I18n.t("fonts.col.font"), I18n.t("fonts.col.type"), I18n.t("fonts.col.embedded"), I18n.t("fonts.col.pages")};
+    }
     /**
      * Filler text for the preview: running text, digits, and the most common symbols and accents of Latin text.
      */
@@ -87,12 +90,12 @@ public final class FontsDialog {
 
         @Override
         public int getColumnCount() {
-            return COLUMNS.length;
+            return columns().length;
         }
 
         @Override
         public String getColumnName(int column) {
-            return COLUMNS[column];
+            return columns()[column];
         }
 
         @Override
@@ -101,14 +104,14 @@ public final class FontsDialog {
             return switch (column) {
                 case 0 -> f.name();
                 case 1 -> f.type();
-                case 2 -> f.embedded() ? "yes" : "no";
+                case 2 -> f.embedded() ? I18n.t("common.yes") : I18n.t("common.no");
                 default -> f.pageText();
             };
         }
     }
 
     public static void show(Component parent, DocumentProxy proxy) {
-        JDialog dialog = new JDialog(SwingUtilities.getWindowAncestor(parent), "Fonts",
+        JDialog dialog = new JDialog(SwingUtilities.getWindowAncestor(parent), I18n.t("menu.fonts"),
                 JDialog.ModalityType.APPLICATION_MODAL);
 
         FontTableModel model = new FontTableModel();
@@ -123,12 +126,10 @@ public final class FontsDialog {
         scroll.setPreferredSize(new Dimension(560, 260));
 
         JLabel summary = new JLabel(" ");
-        JButton replace = new JButton("Replace…");
-        JButton merge = new JButton("Merge Duplicates…");
-        merge.setToolTipText("<html>Fonts that exist more than once (e.g. one copy per page) are merged into one.<br>"
-                + "This includes subsets of the same font where one has the characters of the other.<br>"
-                + "The pages look the same, the file gets smaller.</html>");
-        JButton close = new JButton("Close");
+        JButton replace = new JButton(I18n.t("fonts.replace"));
+        JButton merge = new JButton(I18n.t("fonts.merge"));
+        merge.setToolTipText(I18n.t("fonts.merge.tip"));
+        JButton close = new JButton(I18n.t("about.close"));
         close.addActionListener(e -> dialog.dispose());
 
         Runnable reload = () -> {
@@ -142,7 +143,7 @@ public final class FontsDialog {
             table.clearSelection();
             model.setFonts(fonts);
             long missing = fonts.stream().filter(f -> !f.embedded()).count();
-            summary.setText(fonts.size() + (fonts.size() == 1 ? " font, " : " fonts, ") + missing + " not embedded");
+            summary.setText(I18n.t("fonts.summary", fonts.size(), missing));
             int row = findRow(fonts, selectedFont, selectedName);
             if (row >= 0) {
                 table.setRowSelectionInterval(row, row);
@@ -154,13 +155,13 @@ public final class FontsDialog {
             PdfFonts.FontInfo selectedFont = model.getOrNull(table.getSelectedRow());
             if (selectedFont == null) {
                 replace.setEnabled(false);
-                replace.setToolTipText("Select a font to replace it by a bundled one.");
+                replace.setToolTipText(I18n.t("fonts.replace.selectTip"));
                 return;
             }
             String reason = selectedFont.cannotReplaceReason();
             replace.setEnabled(reason == null);
             replace.setToolTipText(reason != null ? reason
-                    : "Replaces the font program by one of the bundled fonts. The text keeps its characters.");
+                    : I18n.t("fonts.replace.tip"));
         };
         table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting())
@@ -180,7 +181,7 @@ public final class FontsDialog {
                 reload.run();
             } catch (Exception ex) {
                 Log.exception(ex);
-                JOptionPane.showMessageDialog(dialog, ex.getMessage(), "Replace Font failed", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(dialog, ex.getMessage(), I18n.t("fonts.replaceFailed"), JOptionPane.ERROR_MESSAGE);
             }
         });
 
@@ -188,24 +189,20 @@ public final class FontsDialog {
             try {
                 PdfFontMerger.Result found = proxy.findDuplicateFonts();
                 if (found.duplicates() == 0) {
-                    JOptionPane.showMessageDialog(dialog, "<html>There are no fonts to merge.<br>"
-                                    + "<font size='-1'>Fonts are merged if they are the same or if the characters of one are in the other.<br>"
-                                    + "Fonts with contradicting codes, other weights or other types are kept.</font></html>",
-                            "Merge Duplicates", JOptionPane.INFORMATION_MESSAGE);
+                    JOptionPane.showMessageDialog(dialog, I18n.t("fonts.noMerge"),
+                            I18n.t("fonts.merge.title"), JOptionPane.INFORMATION_MESSAGE);
                     return;
                 }
-                int option = JOptionPane.showConfirmDialog(dialog, "<html>" + found.duplicates()
-                                + (found.duplicates() == 1 ? " font" : " fonts") + " can be merged into others, saving about "
-                                + sizeText(found.savedBytes()) + ".<br>The pages are not changed. Merge now?</html>",
-                        "Merge Duplicates", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
+                int option = JOptionPane.showConfirmDialog(dialog, I18n.t("fonts.merge.question", found.duplicates(), sizeText(found.savedBytes())),
+                        I18n.t("fonts.merge.title"), JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
                 if (option != JOptionPane.OK_OPTION)
                     return;
                 PdfFontMerger.Result merged = proxy.mergeDuplicateFonts();
                 reload.run();
-                summary.setText(summary.getText() + " – merged " + merged.duplicates());
+                summary.setText(summary.getText() + " – " + I18n.t("fonts.merged", merged.duplicates()));
             } catch (Exception ex) {
                 Log.exception(ex);
-                JOptionPane.showMessageDialog(dialog, ex.getMessage(), "Merge Duplicates failed", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(dialog, ex.getMessage(), I18n.t("fonts.mergeFailed"), JOptionPane.ERROR_MESSAGE);
             }
         });
 
@@ -239,7 +236,7 @@ public final class FontsDialog {
      */
     private static FontSource chooseReplacement(JDialog owner, PdfFonts.FontInfo font) {
         ReplacePanel panel = new ReplacePanel(font.name(), PdfFontEmbedder.bestMatch(font.dictionary()));
-        int option = JOptionPane.showConfirmDialog(owner, panel, "Replace Font",
+        int option = JOptionPane.showConfirmDialog(owner, panel, I18n.t("fonts.replace.title"),
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         return option == JOptionPane.OK_OPTION ? panel.getSelected() : null;
     }
@@ -302,9 +299,9 @@ public final class FontsDialog {
                         return c;
                     }
                     if (value instanceof PdfFontEmbedder.Variant v)
-                        text = v.displayName() + " – " + v.family().description + (v.equals(best) ? " (best match)" : "");
+                        text = v.displayName() + " – " + v.family().description + (v.equals(best) ? " " + I18n.t("fonts.bestMatch") : "");
                     else if (value instanceof ImportedFont f)
-                        text = f.getName() + " (" + f.getPath().getFileName() + ")" + (f.exists() ? "" : " – file missing");
+                        text = f.getName() + " (" + f.getPath().getFileName() + ")" + (f.exists() ? "" : " – " + I18n.t("fonts.fileMissing"));
                     // The fonts below a heading are indented in the list, not in the closed box.
                     return super.getListCellRendererComponent(list, index >= 0 ? "    " + text : text, index, isSelected, cellHasFocus);
                 }
@@ -322,8 +319,8 @@ public final class FontsDialog {
             previewScroll.setPreferredSize(PREVIEW_SIZE);
             previewScroll.setMinimumSize(PREVIEW_SIZE);
 
-            JButton imported = new JButton("Manage Fonts…");
-            imported.setToolTipText("Adds font files of your own to the list, or removes them.");
+            JButton imported = new JButton(I18n.t("menu.fonts.manage"));
+            imported.setToolTipText(I18n.t("fonts.manage.tip"));
             imported.addActionListener(e -> {
                 ImportedFontsDialog.show(this, store);
                 // The list may have changed.
@@ -345,7 +342,7 @@ public final class FontsDialog {
             gc.anchor = GridBagConstraints.WEST;
             gc.fill = GridBagConstraints.HORIZONTAL;
             gc.weightx = 1;
-            add(new JLabel("<html>Replace <b>" + escape(fontName) + "</b> by:</html>"), gc);
+            add(new JLabel(I18n.t("fonts.replaceBy", escape(fontName))), gc);
             gc.gridy++;
             gc.insets = new Insets(6, 0, 0, 0);
             add(choice, gc);
@@ -354,8 +351,7 @@ public final class FontsDialog {
             add(previewScroll, gc);
             gc.gridy++;
             gc.insets = new Insets(0, 0, 0, 0);
-            add(new JLabel("<html><font size='-1'>The characters stay, the widths are those of the new font.<br>"
-                    + "Fonts that are not metric compatible change the spacing of the text.</font></html>"), gc);
+            add(new JLabel(I18n.t("fonts.replace.note")), gc);
         }
 
         /**
@@ -366,11 +362,11 @@ public final class FontsDialog {
          */
         private void fillList(FontSource select) {
             List<Object> items = new ArrayList<>();
-            items.add(new Header("Bundled fonts"));
+            items.add(new Header(I18n.t("fonts.bundled")));
             items.addAll(PdfFontEmbedder.bundled());
             List<ImportedFont> imported = ImportedFonts.fonts(store);
             if (!imported.isEmpty()) {
-                items.add(new Header("Imported fonts"));
+                items.add(new Header(I18n.t("fonts.imported")));
                 items.addAll(imported);
             }
             model.removeAllElements();
@@ -422,8 +418,7 @@ public final class FontsDialog {
                     preview.setFont(f);
             } catch (Exception e) {
                 preview.setFont(UIManager.getFont("TextArea.font") != null ? UIManager.getFont("TextArea.font") : preview.getFont());
-                preview.setText("The preview is not possible: " + e.getMessage()
-                        + "\nThe font can still be chosen, but it may not be usable.");
+                preview.setText(I18n.t("fonts.previewFailed", e.getMessage()));
             }
             preview.setCaretPosition(0);
         }
@@ -455,7 +450,7 @@ public final class FontsDialog {
         }
         if (source instanceof ImportedFont f) {
             if (!f.exists())
-                throw new java.io.FileNotFoundException("The font file doesn't exist any more: " + f.getPath());
+                throw new java.io.FileNotFoundException(I18n.t("fonts.fileGone", f.getPath()));
             // The file may have been replaced since.
             String key = f.getPath() + "|" + java.nio.file.Files.getLastModifiedTime(f.getPath()).toMillis();
             Font cached = PREVIEW_FONTS.get(key);
@@ -491,7 +486,7 @@ public final class FontsDialog {
 
     private static String sizeText(long bytes) {
         if (bytes < 1024)
-            return bytes + " bytes";
+            return I18n.t("size.bytes", bytes);
         if (bytes < 1024 * 1024)
             return String.format("%.0f KB", bytes / 1024.0);
         return String.format("%.1f MB", bytes / (1024.0 * 1024.0));

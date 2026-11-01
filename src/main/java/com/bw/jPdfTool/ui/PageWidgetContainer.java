@@ -82,16 +82,32 @@ public class PageWidgetContainer extends JComponent {
             }
         });
 
-        Preferences.getInstance().addPropertyChangeListener(
-                evt -> {
-                    Log.debug("PWC: changed " + evt.getPropertyName());
-                    updateRenderingHints();
-                    repaint();
-                },
-                Preferences.USER_PREF_VIEWER_ANTIALIASING,
-                Preferences.USER_PREF_VIEWER_RENDER_QUALITY,
-                Preferences.USER_PREF_VIEWER_INTERPOLATE_BI_CUBIC);
         updateRenderingHints();
+    }
+
+    private static final String[] HINT_PREFS = {
+            Preferences.USER_PREF_VIEWER_ANTIALIASING,
+            Preferences.USER_PREF_VIEWER_RENDER_QUALITY,
+            Preferences.USER_PREF_VIEWER_INTERPOLATE_BI_CUBIC};
+
+    private final java.beans.PropertyChangeListener hintListener = evt -> {
+        Log.debug("PWC: changed " + evt.getPropertyName());
+        updateRenderingHints();
+        repaint();
+    };
+
+    // The listener lives only while the component is displayed, so a disposed window is not kept by the preferences.
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        Preferences.getInstance().addPropertyChangeListener(hintListener, HINT_PREFS);
+        updateRenderingHints();
+    }
+
+    @Override
+    public void removeNotify() {
+        Preferences.getInstance().removePropertyChangeListener(hintListener, HINT_PREFS);
+        super.removeNotify();
     }
 
     protected void updateRenderingHints() {

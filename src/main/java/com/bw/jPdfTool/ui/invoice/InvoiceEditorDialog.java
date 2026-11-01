@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.ui.invoice;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.model.DocumentProxy;
 import com.bw.jPdfTool.ui.UI;
 import com.bw.jPdfTool.invoice.Party;
@@ -80,27 +81,27 @@ public class InvoiceEditorDialog extends JDialog {
     static final Map<String, String> UNITS = new LinkedHashMap<>();
 
     static {
-        UNITS.put("C62", "piece");
-        UNITS.put("H87", "piece (item)");
-        UNITS.put("HUR", "hour");
-        UNITS.put("MIN", "minute");
-        UNITS.put("DAY", "day");
-        UNITS.put("WEE", "week");
-        UNITS.put("MON", "month");
-        UNITS.put("ANN", "year");
-        UNITS.put("LS", "lump sum");
-        UNITS.put("SET", "set");
-        UNITS.put("PR", "pair");
-        UNITS.put("XPK", "package");
-        UNITS.put("KGM", "kilogram");
-        UNITS.put("GRM", "gram");
-        UNITS.put("TNE", "tonne");
-        UNITS.put("MTR", "metre");
-        UNITS.put("KMT", "kilometre");
-        UNITS.put("MTK", "square metre");
-        UNITS.put("MTQ", "cubic metre");
-        UNITS.put("LTR", "litre");
-        UNITS.put("KWH", "kilowatt hour");
+        UNITS.put("C62", "unit.C62");
+        UNITS.put("H87", "unit.H87");
+        UNITS.put("HUR", "unit.HUR");
+        UNITS.put("MIN", "unit.MIN");
+        UNITS.put("DAY", "unit.DAY");
+        UNITS.put("WEE", "unit.WEE");
+        UNITS.put("MON", "unit.MON");
+        UNITS.put("ANN", "unit.ANN");
+        UNITS.put("LS", "unit.LS");
+        UNITS.put("SET", "unit.SET");
+        UNITS.put("PR", "unit.PR");
+        UNITS.put("XPK", "unit.XPK");
+        UNITS.put("KGM", "unit.KGM");
+        UNITS.put("GRM", "unit.GRM");
+        UNITS.put("TNE", "unit.TNE");
+        UNITS.put("MTR", "unit.MTR");
+        UNITS.put("KMT", "unit.KMT");
+        UNITS.put("MTK", "unit.MTK");
+        UNITS.put("MTQ", "unit.MTQ");
+        UNITS.put("LTR", "unit.LTR");
+        UNITS.put("KWH", "unit.KWH");
     }
 
     /**
@@ -130,10 +131,10 @@ public class InvoiceEditorDialog extends JDialog {
     private final JLabel vatValue = amountLabel(false);
     private final JLabel grossValue = amountLabel(true);
     private final JLabel status = new JLabel(" ");
-    private final JButton attachButton = new JButton("Attach to Document");
-    private final JButton loadButton = new JButton("Load XML…");
-    private final JButton saveButton = new JButton("Save XML…");
-    private final JButton cancelButton = new JButton("Cancel");
+    private final JButton attachButton = new JButton(I18n.t("editor.attach"));
+    private final JButton loadButton = new JButton(I18n.t("editor.loadXml"));
+    private final JButton saveButton = new JButton(I18n.t("editor.saveXml"));
+    private final JButton cancelButton = new JButton(I18n.t("common.cancel"));
 
     private PresetChooser sellerPresets;
 
@@ -197,7 +198,7 @@ public class InvoiceEditorDialog extends JDialog {
     private boolean attached;
 
     private InvoiceEditorDialog(Window owner, InvoiceData data, boolean existing, DocumentProxy proxy) {
-        super(owner, existing ? "Edit Invoice" : "Create Invoice", Dialog.ModalityType.APPLICATION_MODAL);
+        super(owner, existing ? I18n.t("editor.title.edit") : I18n.t("editor.title.create"), Dialog.ModalityType.APPLICATION_MODAL);
         this.data = data;
         this.proxy = proxy;
 
@@ -206,18 +207,18 @@ public class InvoiceEditorDialog extends JDialog {
 
         JPanel north = new JPanel(new BorderLayout(0, 8));
         JTabbedPane tabs = new JTabbedPane();
-        tabs.addTab("Invoice", createInvoiceTab());
-        tabs.addTab("Seller", createPartyTab(Role.SELLER, data.seller));
-        tabs.addTab("Buyer", createPartyTab(Role.BUYER, data.buyer));
-        tabs.addTab("Payment", createPaymentTab());
+        tabs.addTab(I18n.t("common.invoice"), createInvoiceTab());
+        tabs.addTab(I18n.t("role.seller"), createPartyTab(Role.SELLER, data.seller));
+        tabs.addTab(I18n.t("role.buyer"), createPartyTab(Role.BUYER, data.buyer));
+        tabs.addTab(I18n.t("editor.tab.payment"), createPaymentTab());
         // All values of the XML, also those without a field in the other tabs.
         xmlFields = new XmlFieldsPanel(data, () -> {
             data.readFromDocument();
             reloadForm();
             changed();
         });
-        tabs.addTab("All fields", xmlFields);
-        tabs.setToolTipTextAt(tabs.getTabCount() - 1, "All values of the invoice XML, also those without a field in the other tabs.");
+        tabs.addTab(I18n.t("editor.tab.allFields"), xmlFields);
+        tabs.setToolTipTextAt(tabs.getTabCount() - 1, I18n.t("editor.tab.allFields.tip"));
         tabs.addChangeListener(e -> {
             if (tabs.getSelectedComponent() == xmlFields) {
                 stopEditing();
@@ -266,9 +267,8 @@ public class InvoiceEditorDialog extends JDialog {
             } catch (Exception e) {
                 Log.exception(e);
                 int answer = JOptionPane.showConfirmDialog(owner,
-                        "<html>The invoice of the document can't be read:<br><i>" + escape(String.valueOf(e.getMessage()))
-                                + "</i><br><br>Create a new invoice instead?</html>",
-                        "Edit Invoice", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
+                        I18n.t("editor.cannotRead", escape(String.valueOf(e.getMessage()))),
+                        I18n.t("editor.title.edit"), JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
                 if (answer != JOptionPane.OK_OPTION)
                     return false;
             }
@@ -291,27 +291,25 @@ public class InvoiceEditorDialog extends JDialog {
         FormPanel f = new FormPanel();
         // Type codes; another code of an existing invoice is added as own entry.
         JComboBox<String> type = codeCombo(DOCUMENT_TYPES, () -> data.documentCode, v -> data.documentCode = v,
-                code -> "Type " + code);
+                code -> I18n.t("editor.type.other", code));
         JComboBox<String> profile = codeCombo(PROFILES, () -> data.profile, v -> data.profile = v,
-                id -> "Other: " + id);
-        profile.setToolTipText("<html>XRechnung is required for invoices to German public authorities.<br>"
-                + "It needs the Leitweg-ID as buyer reference and contact data of seller and buyer.</html>");
+                id -> I18n.t("editor.profile.other", id));
+        profile.setToolTipText(I18n.t("editor.profile.tip"));
 
-        f.row("Type", type, "Profile", profile);
-        f.row("Number", text(() -> data.number, 14, v -> data.number = v),
-                "Currency", text(() -> data.currency, 4, v -> data.currency = v));
-        f.row("Issue date", date(() -> data.issueDate, v -> data.issueDate = v, "Issue date"),
-                "Delivery date", restrict(date(() -> data.deliveryDate, v -> data.deliveryDate = v, "Delivery date"), InvoiceData.Field.DELIVERY_DATE));
-        f.row("Service from", restrict(date(() -> data.periodStart, v -> data.periodStart = v, "Period start"), InvoiceData.Field.PERIOD),
-                "Service to", restrict(date(() -> data.periodEnd, v -> data.periodEnd = v, "Period end"), InvoiceData.Field.PERIOD));
+        f.row(I18n.t("editor.type"), type, I18n.t("editor.profile"), profile);
+        f.row(I18n.t("editor.number"), text(() -> data.number, 14, v -> data.number = v),
+                I18n.t("editor.currency"), text(() -> data.currency, 4, v -> data.currency = v));
+        f.row(I18n.t("invoice.issueDate"), date(() -> data.issueDate, v -> data.issueDate = v, I18n.t("invoice.issueDate")),
+                I18n.t("editor.deliveryDate"), restrict(date(() -> data.deliveryDate, v -> data.deliveryDate = v, I18n.t("editor.deliveryDate")), InvoiceData.Field.DELIVERY_DATE));
+        f.row(I18n.t("editor.serviceFrom"), restrict(date(() -> data.periodStart, v -> data.periodStart = v, I18n.t("editor.periodStart")), InvoiceData.Field.PERIOD),
+                I18n.t("editor.serviceTo"), restrict(date(() -> data.periodEnd, v -> data.periodEnd = v, I18n.t("editor.periodEnd")), InvoiceData.Field.PERIOD));
         JTextField reference = text(() -> data.buyerReference, 14, v -> data.buyerReference = v);
-        reference.setToolTipText("Reference of the buyer, e.g. an order number. For XRechnung the Leitweg-ID.");
-        f.row("Buyer reference", reference);
-        f.row("Note", restrict(text(() -> data.note, 14, v -> data.note = v), InvoiceData.Field.NOTE));
+        reference.setToolTipText(I18n.t("editor.reference.tip"));
+        f.row(I18n.t("editor.buyerReference"), reference);
+        f.row(I18n.t("editor.note"), restrict(text(() -> data.note, 14, v -> data.note = v), InvoiceData.Field.NOTE));
         JTextField exemption = text(() -> data.vatExemptionReason, 14, v -> data.vatExemptionReason = v);
-        exemption.setToolTipText("<html>Only for items with 0% VAT, e.g. \"Kleinunternehmer gemäß § 19 UStG\".<br>"
-                + "Without a reason such items are \"zero rated\".</html>");
-        f.row("VAT exemption", exemption);
+        exemption.setToolTipText(I18n.t("editor.exemption.tip"));
+        f.row(I18n.t("editor.exemption"), exemption);
         return f;
     }
 
@@ -319,10 +317,10 @@ public class InvoiceEditorDialog extends JDialog {
     private static final Map<String, String> PROFILES = new LinkedHashMap<>();
 
     static {
-        DOCUMENT_TYPES.put(InvoiceData.TYPE_INVOICE, "Invoice");
-        DOCUMENT_TYPES.put(InvoiceData.TYPE_CREDIT_NOTE, "Credit note");
-        PROFILES.put(InvoiceData.PROFILE_EN16931, "EN 16931 (Comfort)");
-        PROFILES.put(InvoiceData.PROFILE_XRECHNUNG, "XRechnung");
+        DOCUMENT_TYPES.put(InvoiceData.TYPE_INVOICE, "invoice.type.380");
+        DOCUMENT_TYPES.put(InvoiceData.TYPE_CREDIT_NOTE, "invoice.type.381");
+        PROFILES.put(InvoiceData.PROFILE_EN16931, "editor.profile.en16931");
+        PROFILES.put(InvoiceData.PROFILE_XRECHNUNG, "editor.profile.xrechnung");
     }
 
     /**
@@ -338,7 +336,7 @@ public class InvoiceEditorDialog extends JDialog {
             @Override
             public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
                 String code = (String) value;
-                String text = code == null ? "" : names.getOrDefault(code, unknownName.apply(code));
+                String text = code == null ? "" : names.containsKey(code) ? I18n.t(names.get(code)) : unknownName.apply(code);
                 return super.getListCellRendererComponent(list, text, index, isSelected, cellHasFocus);
             }
         });
@@ -372,7 +370,7 @@ public class InvoiceEditorDialog extends JDialog {
                 reloadForm();
             changed();
         }, role == Role.BUYER ? data::takePaymentConditions : null);
-        panel[0] = new PartyPanel(role == Role.SELLER, "Preset", chooser);
+        panel[0] = new PartyPanel(role == Role.SELLER, I18n.t("editor.preset"), chooser);
         panel[0].setParty(party);
         panel[0].setBaseline(party.copy());
         panel[0].setOnChange(() -> {
@@ -409,9 +407,9 @@ public class InvoiceEditorDialog extends JDialog {
 
     private JComponent createPaymentTab() {
         FormPanel f = new FormPanel();
-        f.compactRow("Due date", restrict(date(() -> data.dueDate, v -> data.dueDate = v, "Due date"), InvoiceData.Field.PAYMENT));
-        f.row("Payment terms", restrict(text(() -> data.paymentTerms, 14, v -> data.paymentTerms = v), InvoiceData.Field.PAYMENT));
-        JLabel hint = new JLabel("The bank account is part of the seller data.");
+        f.compactRow(I18n.t("invoice.dueDate"), restrict(date(() -> data.dueDate, v -> data.dueDate = v, I18n.t("invoice.dueDate")), InvoiceData.Field.PAYMENT));
+        f.row(I18n.t("invoice.paymentTerms"), restrict(text(() -> data.paymentTerms, 14, v -> data.paymentTerms = v), InvoiceData.Field.PAYMENT));
+        JLabel hint = new JLabel(I18n.t("editor.bankHint"));
         hint.setForeground(UIManager.getColor("Label.disabledForeground"));
         f.row("", hint);
         return f;
@@ -472,7 +470,7 @@ public class InvoiceEditorDialog extends JDialog {
         JScrollPane scroll = new JScrollPane(table);
         scroll.setPreferredSize(new Dimension(59 * em, table.getRowHeight() * 7 + table.getTableHeader().getPreferredSize().height));
 
-        JButton add = new JButton("Add Item");
+        JButton add = new JButton(I18n.t("editor.addItem"));
         add.addActionListener(e -> {
             stopEditing();
             data.lines.add(newLine(data));
@@ -486,7 +484,7 @@ public class InvoiceEditorDialog extends JDialog {
                 editor.requestFocusInWindow();
             changed();
         });
-        JButton remove = new JButton("Remove");
+        JButton remove = new JButton(I18n.t("redact.remove"));
         remove.setEnabled(false);
         table.getSelectionModel().addListSelectionListener(e -> remove.setEnabled(table.getSelectedRowCount() > 0));
         remove.addActionListener(e -> {
@@ -508,12 +506,12 @@ public class InvoiceEditorDialog extends JDialog {
         JPanel totals = new JPanel(new GridBagLayout());
         GridBagConstraints gc = new GridBagConstraints();
         gc.gridy = 0;
-        addTotal(totals, gc, "Net amount", netValue, false);
-        addTotal(totals, gc, "VAT", vatValue, false);
-        addTotal(totals, gc, "Total", grossValue, true);
+        addTotal(totals, gc, I18n.t("invoice.netAmount"), netValue, false);
+        addTotal(totals, gc, I18n.t("invoice.vat"), vatValue, false);
+        addTotal(totals, gc, I18n.t("editor.total"), grossValue, true);
 
         // Items, or for profiles without items (MINIMUM, BASIC WL) the net amounts per VAT rate.
-        cards.add(tablePanel("Items", scroll, itemButtons), CARD_ITEMS);
+        cards.add(tablePanel(I18n.t("editor.items"), scroll, itemButtons), CARD_ITEMS);
         cards.add(createAmounts(em), CARD_AMOUNTS);
 
         JPanel panel = new JPanel(new BorderLayout(0, 4));
@@ -567,8 +565,8 @@ public class InvoiceEditorDialog extends JDialog {
         JScrollPane scroll = new JScrollPane(amountTable);
         scroll.setPreferredSize(new Dimension(59 * em, table.getRowHeight() * 7 + amountTable.getTableHeader().getPreferredSize().height));
 
-        JButton add = new JButton("Add Amount");
-        add.setToolTipText("One amount per VAT rate.");
+        JButton add = new JButton(I18n.t("editor.addAmount"));
+        add.setToolTipText(I18n.t("editor.addAmount.tip"));
         add.addActionListener(e -> {
             stopEditing();
             InvoiceData.VatAmount a = new InvoiceData.VatAmount();
@@ -584,7 +582,7 @@ public class InvoiceEditorDialog extends JDialog {
                 editor.requestFocusInWindow();
             changed();
         });
-        JButton remove = new JButton("Remove");
+        JButton remove = new JButton(I18n.t("redact.remove"));
         remove.setEnabled(false);
         amountTable.getSelectionModel().addListSelectionListener(e -> remove.setEnabled(amountTable.getSelectedRowCount() > 0));
         remove.addActionListener(e -> {
@@ -602,15 +600,15 @@ public class InvoiceEditorDialog extends JDialog {
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEADING, 6, 0));
         buttons.add(add);
         buttons.add(remove);
-        JLabel hint = new JLabel("This profile has no items, only the sums.");
+        JLabel hint = new JLabel(I18n.t("editor.noItems"));
         hint.setForeground(UIManager.getColor("Label.disabledForeground"));
         buttons.add(javax.swing.Box.createHorizontalStrut(12));
         buttons.add(hint);
-        return tablePanel("Amounts", scroll, buttons);
+        return tablePanel(I18n.t("editor.amounts"), scroll, buttons);
     }
 
     private class AmountTableModel extends AbstractTableModel {
-        private final String[] names = {"Net amount", "VAT %", "VAT"};
+        private final String[] names = {I18n.t("invoice.netAmount"), I18n.t("editor.col.vatPercent"), I18n.t("invoice.vat")};
 
         @Override
         public int getRowCount() {
@@ -671,7 +669,7 @@ public class InvoiceEditorDialog extends JDialog {
         profileUpdaters.add(() -> {
             boolean ok = data.supports(group);
             field.setEnabled(ok);
-            field.setToolTipText(ok ? toolTip : "Not part of the profile of this invoice, the value is not written.");
+            field.setToolTipText(ok ? toolTip : I18n.t("party.notInProfile"));
         });
         return field;
     }
@@ -734,11 +732,11 @@ public class InvoiceEditorDialog extends JDialog {
         if (code == null)
             return "";
         String name = UNITS.get(code.toString());
-        return name == null ? code.toString() : code + " (" + name + ")";
+        return name == null ? code.toString() : code + " (" + I18n.t(name) + ")";
     }
 
     private class LineTableModel extends AbstractTableModel {
-        private final String[] names = {"Description", "Quantity", "Unit", "Unit price (net)", "VAT %", "Total (net)"};
+        private final String[] names = {I18n.t("editor.col.description"), I18n.t("editor.col.quantity"), I18n.t("editor.col.unit"), I18n.t("editor.col.unitPrice"), I18n.t("editor.col.vatPercent"), I18n.t("editor.col.totalNet")};
 
         @Override
         public int getRowCount() {
@@ -880,8 +878,8 @@ public class InvoiceEditorDialog extends JDialog {
         status.setIconTextGap(6);
 
         attachButton.addActionListener(e -> attach());
-        saveButton.setToolTipText("Stores the invoice as XML file, without changing the document.");
-        loadButton.setToolTipText("Replaces the content by an invoice XML file.");
+        saveButton.setToolTipText(I18n.t("editor.saveXml.tip"));
+        loadButton.setToolTipText(I18n.t("editor.loadXml.tip"));
         loadButton.addActionListener(e -> loadXml());
         saveButton.addActionListener(e -> saveXml());
         cancelButton.addActionListener(e -> cancel());
@@ -902,7 +900,7 @@ public class InvoiceEditorDialog extends JDialog {
     private List<String> problems() {
         List<String> p = new ArrayList<>(invalid.values());
         if (totalsError != null)
-            p.add("The sums can't be calculated: " + totalsError);
+            p.add(I18n.t("editor.sumsError", totalsError));
         p.addAll(data.check());
         return p;
     }
@@ -1017,16 +1015,16 @@ public class InvoiceEditorDialog extends JDialog {
             List<String> hints = data.hints();
             if (hints.isEmpty()) {
                 status.setIcon(null);
-                status.setText("Ready to attach.");
+                status.setText(I18n.t("editor.ready"));
                 status.setToolTipText(null);
             } else {
                 status.setIcon(smallWarning());
-                status.setText("Ready to attach. Note: " + hints.get(0) + (hints.size() > 1 ? "  (+" + (hints.size() - 1) + " more)" : ""));
+                status.setText(I18n.t("editor.readyNote", hints.get(0)) + (hints.size() > 1 ? "  " + I18n.t("editor.more", hints.size() - 1) : ""));
                 status.setToolTipText("<html>" + String.join("<br>", hints.stream().map(InvoiceEditorDialog::escape).toList()) + "</html>");
             }
         } else {
             status.setIcon(smallWarning());
-            status.setText(p.get(0) + (p.size() > 1 ? "  (+" + (p.size() - 1) + " more)" : ""));
+            status.setText(p.get(0) + (p.size() > 1 ? "  " + I18n.t("editor.more", p.size() - 1) : ""));
             status.setToolTipText("<html>" + String.join("<br>", p.stream().map(InvoiceEditorDialog::escape).toList()) + "</html>");
         }
     }
@@ -1066,8 +1064,7 @@ public class InvoiceEditorDialog extends JDialog {
         if (p.isEmpty())
             return true;
         JOptionPane.showMessageDialog(this,
-                "<html><b>The invoice can't be " + action + " yet:</b><br><br>"
-                        + String.join("<br>", p.stream().map(s -> "• " + escape(s)).toList()) + "</html>",
+                I18n.t("editor.incomplete", I18n.t("editor.action." + action), String.join("<br>", p.stream().map(s -> "• " + escape(s)).toList())),
                 getTitle(), JOptionPane.WARNING_MESSAGE);
         return false;
     }
@@ -1079,7 +1076,7 @@ public class InvoiceEditorDialog extends JDialog {
         try {
             xml = data.toXml();
         } catch (Exception e) {
-            showError("Failed to create the invoice", e);
+            showError(I18n.t("editor.createFailed"), e);
             return;
         }
         setWorking(true);
@@ -1101,7 +1098,7 @@ public class InvoiceEditorDialog extends JDialog {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 } catch (ExecutionException e) {
-                    showError("Failed to attach the invoice", e.getCause() == null ? e : e.getCause());
+                    showError(I18n.t("editor.attachFailed"), e.getCause() == null ? e : e.getCause());
                 }
             }
         }.execute();
@@ -1114,7 +1111,7 @@ public class InvoiceEditorDialog extends JDialog {
         if (working)
             return;
         stopEditing();
-        if (dirty && JOptionPane.showConfirmDialog(this, "Replace the current content?", getTitle(),
+        if (dirty && JOptionPane.showConfirmDialog(this, I18n.t("editor.replaceQuestion"), getTitle(),
                 JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE) != JOptionPane.YES_OPTION)
             return;
         JFileChooser chooser = new JFileChooser();
@@ -1122,7 +1119,7 @@ public class InvoiceEditorDialog extends JDialog {
         if (lastDir != null)
             chooser.setCurrentDirectory(new File(lastDir));
         chooser.setFileFilter(new FileNameExtensionFilter("XML", "xml"));
-        chooser.setDialogTitle("Load Invoice XML…");
+        chooser.setDialogTitle(I18n.t("editor.loadTitle"));
         if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION)
             return;
         byte[] xml;
@@ -1130,7 +1127,7 @@ public class InvoiceEditorDialog extends JDialog {
             xml = Files.readAllBytes(chooser.getSelectedFile().toPath());
             data.replaceXml(xml);
         } catch (Exception e) {
-            showError("The file is no valid invoice", e);
+            showError(I18n.t("editor.noValidInvoice"), e);
             return;
         }
         reloadForm();
@@ -1147,7 +1144,7 @@ public class InvoiceEditorDialog extends JDialog {
         if (lastDir != null)
             chooser.setCurrentDirectory(new File(lastDir));
         chooser.setFileFilter(new FileNameExtensionFilter("XML", "xml"));
-        chooser.setDialogTitle("Save Invoice XML…");
+        chooser.setDialogTitle(I18n.t("menu.invoice.save"));
         String name = data.number == null || data.number.isBlank() ? "factur-x" : data.number.trim().replaceAll("[\\\\/:*?\"<>|\\s]+", "_");
         chooser.setSelectedFile(new File(chooser.getCurrentDirectory(), name + ".xml"));
         if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION)
@@ -1161,7 +1158,7 @@ public class InvoiceEditorDialog extends JDialog {
             rememberPreset();
             dirty = false;
         } catch (Exception e) {
-            showError("Failed to save the invoice", e);
+            showError(I18n.t("editor.saveFailed"), e);
         }
     }
 
@@ -1170,7 +1167,7 @@ public class InvoiceEditorDialog extends JDialog {
             return;
         stopEditing();
         if (dirty) {
-            int answer = JOptionPane.showConfirmDialog(this, "Discard the changes?", getTitle(),
+            int answer = JOptionPane.showConfirmDialog(this, I18n.t("party.discard"), getTitle(),
                     JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
             if (answer != JOptionPane.YES_OPTION)
                 return;
@@ -1187,7 +1184,7 @@ public class InvoiceEditorDialog extends JDialog {
         setCursor(working ? Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR) : null);
         if (working) {
             status.setIcon(null);
-            status.setText("Attaching and validating…");
+            status.setText(I18n.t("editor.attaching"));
             status.setToolTipText(null);
         } else {
             update();
@@ -1266,7 +1263,7 @@ public class InvoiceEditorDialog extends JDialog {
             if (f.isInputValid()) {
                 invalid.remove(f);
             } else {
-                invalid.put(f, caption + " is no valid date (" + DateField.pattern(locale) + ").");
+                invalid.put(f, I18n.t("editor.invalidDate", caption, DateField.pattern(locale)));
             }
             setter.accept(f.getDate());
             changed();

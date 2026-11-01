@@ -2,6 +2,7 @@ package com.bw.jPdfTool.ui;
 
 import com.bw.jPdfTool.AboutInfo;
 import com.bw.jPdfTool.BuildVersion;
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.Log;
 
 import javax.swing.BorderFactory;
@@ -41,7 +42,7 @@ public final class AboutDialog {
     }
 
     public static void show(Component parent) {
-        JDialog dialog = new JDialog(SwingUtilities.getWindowAncestor(parent), "About " + AboutInfo.NAME,
+        JDialog dialog = new JDialog(SwingUtilities.getWindowAncestor(parent), I18n.t("about.title", AboutInfo.NAME),
                 JDialog.ModalityType.APPLICATION_MODAL);
 
         JPanel content = new JPanel(new GridBagLayout());
@@ -57,11 +58,11 @@ public final class AboutDialog {
 
         gc.gridy++;
         gc.insets = new Insets(2, 0, 0, 0);
-        content.add(new JLabel("Build date " + BuildVersion.BUILD_DATE), gc);
+        content.add(new JLabel(I18n.t("about.buildDate", BuildVersion.BUILD_DATE)), gc);
 
         gc.gridy++;
         gc.insets = new Insets(8, 0, 0, 0);
-        content.add(new JLabel("<html><body style=\"width:525px\">" + AboutInfo.DESCRIPTION + "</body></html>"), gc);
+        content.add(new JLabel("<html><body style=\"width:525px\">" + I18n.t("about.description") + "</body></html>"), gc);
 
         gc.gridy++;
         gc.insets = new Insets(14, 0, 0, 0);
@@ -88,11 +89,11 @@ public final class AboutDialog {
         scroll.setPreferredSize(new Dimension(910, 240));
         content.add(scroll, gc);
 
-        JButton copy = new JButton("Copy Info");
-        copy.setToolTipText("Copies version, system and libraries to the clipboard, e.g. for a bug report.");
+        JButton copy = new JButton(I18n.t("about.copy"));
+        copy.setToolTipText(I18n.t("about.copyTip"));
         copy.addActionListener(e -> Toolkit.getDefaultToolkit().getSystemClipboard()
                 .setContents(new StringSelection(AboutInfo.asText()), null));
-        JButton close = new JButton("Close");
+        JButton close = new JButton(I18n.t("about.close"));
         close.addActionListener(e -> dialog.dispose());
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
         buttons.add(copy);
@@ -119,8 +120,8 @@ public final class AboutDialog {
     private static String details() {
         StringBuilder sb = new StringBuilder("<html><body style=\"font-family:SansSerif\">");
         sb.append("<b>Java</b> ").append(escape(AboutInfo.java())).append("<br>");
-        sb.append("<b>System</b> ").append(escape(AboutInfo.os())).append("<br><br>");
-        sb.append("<b>Libraries and fonts</b><table cellspacing=\"0\" cellpadding=\"2\">");
+        sb.append("<b>" + I18n.t("about.system") + "</b> ").append(escape(AboutInfo.os())).append("<br><br>");
+        sb.append("<b>" + I18n.t("about.libraries") + "</b><table cellspacing=\"0\" cellpadding=\"2\">");
         for (AboutInfo.Component c : AboutInfo.components()) {
             sb.append("<tr><td>").append(escape(c.name()));
             if (!c.version().isEmpty())
@@ -147,11 +148,11 @@ public final class AboutDialog {
     private static JPanel licenseRow(JDialog dialog) {
         // No gaps at the border, so the row aligns with the other lines.
         JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        JLabel text = new JLabel("License: " + AboutInfo.LICENSE_NAME);
+        JLabel text = new JLabel(I18n.t("about.license", AboutInfo.LICENSE_NAME));
         text.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 10));
         p.add(text);
-        JButton show = new JButton("License…");
-        show.setToolTipText("Shows the license text.");
+        JButton show = new JButton(I18n.t("about.licenseButton"));
+        show.setToolTipText(I18n.t("about.licenseTip"));
         show.addActionListener(e -> showLicense(dialog));
         p.add(show);
         return p;

@@ -189,9 +189,9 @@ public final class PdfStandard {
     public static Map<String, Integer> fixPdfaIssues(PDDocument document) throws IOException {
         Map<String, Integer> changes = new LinkedHashMap<>();
         if (addSrgbOutputIntent(document))
-            changes.put("Added sRGB output intent", 1);
+            changes.put(I18n.t("fix.srgb"), 1);
         if (addPdfa3Identification(document))
-            changes.put("Declared PDF/A-3b", 1);
+            changes.put(I18n.t("fix.declaredPdfa3b"), 1);
         changes.putAll(PdfaFixer.fix(document));
         changes.forEach((what, times) -> Log.info("PDF/A: %s (%d)", what, times));
         return changes;
@@ -254,10 +254,10 @@ public final class PdfStandard {
         final boolean converting = current != target;
         if (!target.embeddedFilesAllowed() && converting) {
             if (EInvoice.removeXml(document))
-                changes.put("Removed invoice", 1);
+                changes.put(I18n.t("fix.removedInvoice"), 1);
             int files = removeEmbeddedFiles(document);
             if (files > 0)
-                changes.put("Removed embedded files", files);
+                changes.put(I18n.t("fix.removedFiles"), files);
         }
         if (converting) {
             changes.putAll(removeDeclarations(document, PdfStandardProfile.Family.PDFA));
@@ -265,31 +265,31 @@ public final class PdfStandard {
                 MustangPdfaConverter.convert(document);
             if (profile(document) != target)
                 declare(document, target);
-            changes.put("Declared " + target, 1);
+            changes.put(I18n.t("fix.declared", target), 1);
         }
         final boolean part1 = target.part() == 1;
         if (part1 && converting && DocumentInformation.copy(document, document))
             // PDF/A-1 demands that the document information equals the metadata exactly.
-            changes.put("Synchronized document information and metadata", 1);
+            changes.put(I18n.t("fix.syncInfo"), 1);
         if (part1 && !usesTransparency(document)) {
             int groups = removePageGroups(document);
             if (groups > 0)
-                changes.put("Removed page transparency groups", groups);
+                changes.put(I18n.t("fix.removedTransparency"), groups);
         }
         if (target.part() == 4 && document.getVersion() < 2.0f) {
             document.setVersion(2.0f);
             // PDFBox writes the version into the catalog, PDF/A-4 demands it in the file header.
             document.getDocument().setVersion(2.0f);
-            changes.put("Raised PDF version to 2.0", 1);
+            changes.put(I18n.t("fix.pdf20"), 1);
         }
         if (target.part() == 4 && converting) {
             // The metadata carries the information, the document information dictionary is forbidden.
             DocumentInformation.copy(document, document);
             DocumentInformation.removeInfo(document);
-            changes.put("Moved document information to the metadata", 1);
+            changes.put(I18n.t("fix.movedInfo"), 1);
         }
         if (addSrgbOutputIntent(document))
-            changes.put("Added sRGB output intent", 1);
+            changes.put(I18n.t("fix.srgb"), 1);
         changes.putAll(PdfaFixer.fix(document));
         changes.forEach((what, times) -> Log.info("PDF/A: %s (%d)", what, times));
         return changes;
@@ -326,7 +326,7 @@ public final class PdfStandard {
                 info.setCustomMetadataValue("GTS_PDFXVersion", version);
                 if (info.getTrapped() == null)
                     info.setTrapped("False");
-                changes.put("Declared " + target, 1);
+                changes.put(I18n.t("fix.declared", target), 1);
                 int boxes = 0;
                 for (var page : document.getPages())
                     if (page.getCOSObject().getDictionaryObject(COSName.getPDFName("TrimBox")) == null
@@ -335,27 +335,27 @@ public final class PdfStandard {
                         ++boxes;
                     }
                 if (boxes > 0)
-                    changes.put("Added trim box", boxes);
+                    changes.put(I18n.t("fix.trimBox"), boxes);
                 writeXmp(document, xmp);
                 if (target != PdfStandardProfile.PDFX_1A && addSrgbOutputIntent(document))
-                    changes.put("Added sRGB output intent", 1);
+                    changes.put(I18n.t("fix.srgb"), 1);
                 changes.putAll(PdfaFixer.fix(document));
             }
             case PDFUA -> {
                 xmp = addXmpProperty(xmp, "pdfuaid", "http://www.aiim.org/pdfua/ns/id/", "part", "1");
                 writeXmp(document, xmp);
-                changes.put("Declared " + target, 1);
+                changes.put(I18n.t("fix.declared", target), 1);
                 changes.putAll(fixUniversalAccess(document));
             }
             case PDFE -> {
                 writeXmp(document, addXmpProperty(xmp, "pdfe", "http://www.aiim.org/pdfe/ns/id/", "ISO_PDFEVersion",
                         "PDF/E-1"));
-                changes.put("Declared " + target, 1);
+                changes.put(I18n.t("fix.declared", target), 1);
             }
             default -> {
                 writeXmp(document, addXmpProperty(xmp, "pdfvtid", "http://www.npes.org/pdfvt/ns/id/",
                         "GTS_PDFVTVersion", "PDF/VT-1"));
-                changes.put("Declared " + target, 1);
+                changes.put(I18n.t("fix.declared", target), 1);
             }
         }
         changes.forEach((what, times) -> Log.info("%s: %s (%d)", target, what, times));
@@ -371,7 +371,7 @@ public final class PdfStandard {
         var catalog = document.getDocumentCatalog();
         if (catalog.getLanguage() == null || catalog.getLanguage().isBlank()) {
             catalog.setLanguage(Locale.getDefault().toLanguageTag());
-            changes.put("Set document language", 1);
+            changes.put(I18n.t("fix.language"), 1);
         }
         var prefs = catalog.getViewerPreferences();
         if (prefs == null || !prefs.displayDocTitle()) {
@@ -379,14 +379,14 @@ public final class PdfStandard {
                 prefs = new PDViewerPreferences(new COSDictionary());
             prefs.setDisplayDocTitle(true);
             catalog.setViewerPreferences(prefs);
-            changes.put("Show the document title in the window title", 1);
+            changes.put(I18n.t("fix.titleDisplay"), 1);
         }
         if (catalog.getStructureTreeRoot() != null
                 && (catalog.getMarkInfo() == null || !catalog.getMarkInfo().isMarked())) {
             var mark = new PDMarkInfo();
             mark.setMarked(true);
             catalog.setMarkInfo(mark);
-            changes.put("Marked the document as tagged", 1);
+            changes.put(I18n.t("fix.markedTagged"), 1);
         }
         int tabs = 0;
         for (var page : document.getPages())
@@ -396,10 +396,10 @@ public final class PdfStandard {
                 ++tabs;
             }
         if (tabs > 0)
-            changes.put("Set tab order along the structure", tabs);
+            changes.put(I18n.t("fix.tabOrder"), tabs);
         if (DocumentInformation.copy(document, document))
             // PDF/UA needs the title in the metadata.
-            changes.put("Synchronized document information and metadata", 1);
+            changes.put(I18n.t("fix.syncInfo"), 1);
         return changes;
     }
 
@@ -417,23 +417,23 @@ public final class PdfStandard {
         if (keep != PdfStandardProfile.Family.PDFA && pdfaPart(document) > 0) {
             for (String name : new String[]{"part", "conformance", "rev", "amd"})
                 result = removePdfaid(result, name);
-            changes.put("Removed PDF/A declaration", 1);
+            changes.put(I18n.t("fix.removedPdfa"), 1);
         }
         if (keep != PdfStandardProfile.Family.PDFX && PDFX.matcher(xmp).find()) {
             result = removeXmpProperty(result, "pdfxid", "GTS_PDFXVersion");
-            changes.put("Removed PDF/X declaration", 1);
+            changes.put(I18n.t("fix.removedPdfx"), 1);
         }
         if (keep != PdfStandardProfile.Family.PDFUA && PDFUA.matcher(xmp).find()) {
             result = removeXmpProperty(result, "pdfuaid", "part");
-            changes.put("Removed PDF/UA declaration", 1);
+            changes.put(I18n.t("fix.removedPdfua"), 1);
         }
         if (keep != PdfStandardProfile.Family.PDFE && PDFE.matcher(xmp).find()) {
             result = removeXmpProperty(result, "pdfe", "ISO_PDFEVersion");
-            changes.put("Removed PDF/E declaration", 1);
+            changes.put(I18n.t("fix.removedPdfe"), 1);
         }
         if (keep != PdfStandardProfile.Family.PDFVT && PDFVT.matcher(xmp).find()) {
             result = removeXmpProperty(result, "pdfvtid", "GTS_PDFVTVersion");
-            changes.put("Removed PDF/VT declaration", 1);
+            changes.put(I18n.t("fix.removedPdfvt"), 1);
         }
         if (!changes.isEmpty())
             writeXmp(document, result);
@@ -467,7 +467,7 @@ public final class PdfStandard {
         for (String name : new String[]{"part", "conformance", "rev", "amd"})
             xmp = removePdfaid(xmp, name);
         writeXmp(document, xmp);
-        changes.put("Removed PDF/A declaration", 1);
+        changes.put(I18n.t("fix.removedPdfa"), 1);
         return changes;
     }
 
@@ -510,42 +510,40 @@ public final class PdfStandard {
         boolean invoice = EInvoice.hasInvoice(document);
         if (current != null && current.isPdfa() && (target == null || !target.isPdfa())) {
             if (invoice)
-                lost.add("The PDF/A declaration is removed: the e-invoice is not a valid e-invoice any more.");
+                lost.add(I18n.t("impact.pdfaRemovedInvoice"));
             else
-                lost.add("The PDF/A declaration is removed. The document is not archive conform any more.");
+                lost.add(I18n.t("impact.pdfaRemoved"));
         }
         if (target == null)
             return new Impact(lost, notRepaired, info);
         if (current != null && !current.isPdfa() && current.family() != target.family())
-            lost.add("The " + current + " declaration is removed.");
+            lost.add(I18n.t("impact.declRemoved", current));
         if (!target.embeddedFilesAllowed() && target.isPdfa()) {
             if (invoice)
-                lost.add("The e-invoice (ZUGFeRD/Factur-X) is removed.");
+                lost.add(I18n.t("impact.invoiceRemoved"));
             int files = countEmbeddedFiles(document) - (invoice ? 1 : 0);
             if (files > 0)
-                lost.add("Embedded files are removed (" + files + ").");
+                lost.add(I18n.t("impact.filesRemoved", files));
         }
         if (target.isPdfa() && document.isEncrypted())
-            lost.add("The password protection is removed.");
+            lost.add(I18n.t("impact.passwordRemoved"));
         boolean tagged = document.getDocumentCatalog().getStructureTreeRoot() != null;
         if (target.isPdfa() && "A".equals(target.conformance()) && !tagged)
-            notRepaired.add("Level a needs a tagged document structure. The document has none and the tool can't create it.");
+            notRepaired.add(I18n.t("impact.levelA"));
         if (target.family() == PdfStandardProfile.Family.PDFUA && !tagged)
-            notRepaired.add("PDF/UA needs a tagged document structure. The document has none and the tool can't create it.");
+            notRepaired.add(I18n.t("impact.ua"));
         if (target == PdfStandardProfile.PDFA_4F && countEmbeddedFiles(document) == 0)
-            notRepaired.add("PDF/A-4f needs an embedded file. The document has none.");
+            notRepaired.add(I18n.t("impact.pdfa4f"));
         if (target.isPdfa() && "U".equals(target.conformance()))
-            info.add("Level u needs a Unicode mapping for all text. That is not repaired, the check tells if it is missing.");
+            info.add(I18n.t("impact.levelU"));
         if (target.isPdfa() && target.part() == 1 && usesTransparency(document))
-            notRepaired.add("The document uses transparency, which PDF/A-1 forbids. This can't be repaired.");
+            notRepaired.add(I18n.t("impact.transparency"));
         if (target.isPdfa() && target.part() == 1)
-            info.add("PDF/A-1 forbids compressed object streams: the option Compression is switched off.");
+            info.add(I18n.t("impact.compression"));
         if (target.family() == PdfStandardProfile.Family.PDFX)
-            info.add("Only the print preparation is started (information, trim box"
-                    + (target == PdfStandardProfile.PDFX_1A ? "" : ", sRGB output intent")
-                    + "). Color conversion to CMYK, a CMYK output intent and trapping are not done.");
+            info.add(I18n.t(target == PdfStandardProfile.PDFX_1A ? "impact.print.1a" : "impact.print"));
         if (target.family() == PdfStandardProfile.Family.PDFE || target.family() == PdfStandardProfile.Family.PDFVT)
-            info.add("Only the declaration is written, the content is not changed.");
+            info.add(I18n.t("impact.declOnly"));
         if (target.notVerifiableReason() != null)
             info.add(target.notVerifiableReason());
         return new Impact(lost, notRepaired, info);

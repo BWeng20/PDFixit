@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.model;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.Log;
 import com.bw.jPdfTool.Preferences;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -28,7 +29,7 @@ public class RenderQueue {
             dpi = prefs.getDpi();
             prefs.addPropertyChangeListener(propertyChangeListener, Preferences.USER_PREF_DPI);
             running = true;
-            PdfRenderWorker worker = new PdfRenderWorker();
+            worker = new PdfRenderWorker();
             worker.setDaemon(true);
             worker.setName("PdfRenderer");
             worker.start();
@@ -42,8 +43,15 @@ public class RenderQueue {
         Preferences.getInstance().removePropertyChangeListener(propertyChangeListener, Preferences.USER_PREF_DPI);
         if (running) {
             running = false;
+            documentQueue.clear();
+            // Wakes the worker from take(), so it can see that it should end.
+            if (worker != null)
+                worker.interrupt();
+            worker = null;
         }
     }
+
+    private Thread worker;
 
     public void addDocument(DocumentProxy document) {
         if (document != null)
@@ -96,7 +104,7 @@ public class RenderQueue {
                                                 continue;
                                             }
                                             if (page.image == null) {
-                                                page.error = "Page not rendered (unknown error)";
+                                                page.error = I18n.t("render.unknown");
 
                                             }
                                             page.dpi = dpi;
@@ -105,7 +113,7 @@ public class RenderQueue {
                                             page.error = e.getMessage();
                                         }
                                     } else {
-                                        page.error = "Page Index of range (internal error)";
+                                        page.error = I18n.t("render.range");
                                     }
                                     pageRendered(page);
                                 }

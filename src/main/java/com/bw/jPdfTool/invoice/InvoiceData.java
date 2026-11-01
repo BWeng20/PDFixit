@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.invoice;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.Log;
 import com.bw.jPdfTool.SafeFile;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -437,63 +438,63 @@ public final class InvoiceData {
     public List<String> check() {
         List<String> problems = new ArrayList<>();
         if (!isSet(number))
-            problems.add("Invoice number is missing.");
+            problems.add(I18n.t("check.number"));
         if (issueDate == null)
             problems.add(unreadableDates.containsKey("Issue date")
-                    ? "Issue date '" + unreadableDates.get("Issue date") + "' of the XML can't be read, enter it again."
-                    : "Issue date is missing.");
+                    ? I18n.t("check.issueDate.unreadable", unreadableDates.get("Issue date"))
+                    : I18n.t("check.issueDate.missing"));
         if (!isSet(currency) || !currency.trim().matches("[A-Za-z]{3}"))
-            problems.add("Currency must be a three letter code like EUR.");
+            problems.add(I18n.t("check.currency"));
         if (supports(Field.PERIOD) && periodStart != null && periodEnd != null && periodEnd.isBefore(periodStart))
-            problems.add("The end of the service period is before its start.");
+            problems.add(I18n.t("check.period"));
         // MINIMUM and BASIC WL only carry the sums: no items, and less data of the parties.
         boolean itemless = !hasItems();
-        checkParty(problems, "Seller", seller, supports(Field.SELLER_ADDRESS), true);
-        checkParty(problems, "Buyer", buyer, supports(Field.BUYER_DETAILS), supports(Field.BUYER_DETAILS));
+        checkParty(problems, "seller", seller, supports(Field.SELLER_ADDRESS), true);
+        checkParty(problems, "buyer", buyer, supports(Field.BUYER_DETAILS), supports(Field.BUYER_DETAILS));
         if (!isSet(seller.vatId) && !isSet(seller.taxId))
-            problems.add("Seller needs a VAT ID or a tax number.");
+            problems.add(I18n.t("check.sellerTax"));
         if (itemless) {
             // Without amounts, they are taken from the items when writing.
             if (vatAmounts.isEmpty() && lines.stream().noneMatch(l -> l.total() != null && l.vatPercent != null))
-                problems.add("The invoice has no amounts.");
+                problems.add(I18n.t("check.noAmounts"));
             for (int i = 0; i < vatAmounts.size(); ++i) {
                 VatAmount a = vatAmounts.get(i);
-                String prefix = "Amount " + (i + 1) + ": ";
+                final int n = i + 1;
                 if (a.net == null)
-                    problems.add(prefix + "net amount is missing.");
+                    problems.add(I18n.t("check.amount.net", n));
                 if (a.vatPercent == null)
-                    problems.add(prefix + "VAT rate is missing.");
+                    problems.add(I18n.t("check.amount.vat", n));
                 else if (a.vatPercent.signum() < 0)
-                    problems.add(prefix + "VAT rate can't be negative.");
+                    problems.add(I18n.t("check.amount.vatNegative", n));
             }
         } else if (lines.isEmpty()) {
-            problems.add("The invoice has no items.");
+            problems.add(I18n.t("check.noItems"));
         }
         for (int i = 0; i < (itemless ? 0 : lines.size()); ++i) {
             Line l = lines.get(i);
-            String prefix = "Item " + (i + 1) + ": ";
+            final int n = i + 1;
             if (!isSet(l.name))
-                problems.add(prefix + "description is missing.");
+                problems.add(I18n.t("check.item.name", n));
             if (l.quantity == null)
-                problems.add(prefix + "quantity is missing.");
+                problems.add(I18n.t("check.item.quantity", n));
             if (l.price == null)
-                problems.add(prefix + "price is missing.");
+                problems.add(I18n.t("check.item.price", n));
             if (l.vatPercent == null)
-                problems.add(prefix + "VAT rate is missing.");
+                problems.add(I18n.t("check.item.vat", n));
             else if (l.vatPercent.signum() < 0)
-                problems.add(prefix + "VAT rate can't be negative.");
+                problems.add(I18n.t("check.item.vatNegative", n));
             if (!isSet(l.unit))
-                problems.add(prefix + "unit is missing.");
+                problems.add(I18n.t("check.item.unit", n));
         }
         if (supports(Field.PAYMENT) && dueDate == null && !isSet(paymentTerms))
-            problems.add("Due date or payment terms are needed.");
+            problems.add(I18n.t("check.dueOrTerms"));
         if (isXRechnung()) {
             if (!isSet(buyerReference))
-                problems.add("XRechnung needs the buyer reference (Leitweg-ID).");
+                problems.add(I18n.t("check.xr.ref"));
             if (!isSet(seller.contactName) || !isSet(seller.phone) || !isSet(seller.email))
-                problems.add("XRechnung needs contact name, phone and e-mail of the seller.");
+                problems.add(I18n.t("check.xr.contact"));
             if (!isSet(buyer.email))
-                problems.add("XRechnung needs the e-mail of the buyer.");
+                problems.add(I18n.t("check.xr.buyerEmail"));
         }
         return problems;
     }
@@ -508,10 +509,10 @@ public final class InvoiceData {
         if (supports(Field.PERIOD)) {
             boolean period = periodStart != null || periodEnd != null;
             if (deliveryDate == null && !period)
-                hints.add("Neither a delivery date nor a service period is given. The invoice should state one of them.");
+                hints.add(I18n.t("hint.noDate"));
             if (deliveryDate != null && ((periodStart != null && deliveryDate.isBefore(periodStart))
                     || (periodEnd != null && deliveryDate.isAfter(periodEnd))))
-                hints.add("The delivery date is outside the service period.");
+                hints.add(I18n.t("hint.dateOutside"));
         }
         return hints;
     }
@@ -562,13 +563,13 @@ public final class InvoiceData {
      */
     private static void checkParty(List<String> problems, String role, Party p, boolean address, boolean countryNeeded) {
         if (!isSet(p.name))
-            problems.add(role + " name is missing.");
+            problems.add(I18n.t("check." + role + ".name"));
         if (address && !isSet(p.city))
-            problems.add(role + " city is missing.");
+            problems.add(I18n.t("check." + role + ".city"));
         if (address && !isSet(p.zip))
-            problems.add(role + " postcode is missing.");
+            problems.add(I18n.t("check." + role + ".zip"));
         if ((address || countryNeeded || isSet(p.country)) && (!isSet(p.country) || !p.country.trim().matches("[A-Za-z]{2}")))
-            problems.add(role + " country must be a two letter code like DE.");
+            problems.add(I18n.t("check." + role + ".country"));
     }
 
     /**

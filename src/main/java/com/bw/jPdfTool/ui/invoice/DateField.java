@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.ui.invoice;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.ui.UI;
 
 import javax.swing.JButton;
@@ -87,12 +88,12 @@ public class DateField extends JPanel {
             column = 0;
             build("yyyy-MM-dd");
         }
-        pickerButton.setToolTipText("Pick a date");
+        pickerButton.setToolTipText(I18n.t("date.pick"));
         pickerButton.putClientProperty("JButton.buttonType", "toolBarButton");
         pickerButton.addActionListener(e -> openPicker());
         pickerButton.setMargin(new Insets(2, 2, 2, 2));
         put(pickerButton, 0, 3, 0);
-        clearButton.setToolTipText("Clear the date");
+        clearButton.setToolTipText(I18n.t("date.clear"));
         clearButton.putClientProperty("JButton.buttonType", "toolBarButton");
         clearButton.addActionListener(e -> {
             setDate(null);

@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.fonts;
 
+import com.bw.jPdfTool.I18n;
 import org.apache.fontbox.cmap.CMap;
 import org.apache.fontbox.cmap.CMapParser;
 import org.apache.fontbox.ttf.TTFParser;
@@ -144,11 +145,11 @@ public final class PdfFontEmbedder {
         if (COSName.TYPE0.equals(subtype))
             return cidReason(font);
         if (COSName.TYPE3.equals(subtype))
-            return "Type 3 fonts draw their characters themselves.";
+            return I18n.t("fontemb.type3");
         if (containsAny(lower, SYMBOL_FONTS))
-            return "Symbol fonts have no substitute.";
+            return I18n.t("fontemb.symbol");
         if (isEmbedded(font) && !font.containsKey(COSName.ENCODING))
-            return "The characters of this font are defined by the font program itself (no encoding).";
+            return I18n.t("fontemb.noEncoding");
         return null;
     }
 
@@ -335,8 +336,8 @@ public final class PdfFontEmbedder {
             job.unicode[code - job.first] = u;
         }
         if (!missing.isEmpty())
-            throw new FontEmbedException("Font " + job.name + ": these characters are not in " + job.source.displayName() + ": "
-                    + String.join(" ", missing.stream().limit(12).toList()) + (missing.size() > 12 ? " ..." : ""));
+            throw new FontEmbedException(I18n.t("fontemb.missing", job.name, job.source.displayName(),
+                    String.join(" ", missing.stream().limit(12).toList()) + (missing.size() > 12 ? " ..." : "")));
     }
 
     private static COSArray names(Map<Integer, String> differences) {
@@ -375,16 +376,15 @@ public final class PdfFontEmbedder {
                 if (reason == null)
                     cidFonts.add(font);
                 else
-                    impossible.add(name + " (composite font: " + reason + ")");
+                    impossible.add(I18n.t("fontemb.composite", name, reason));
             } else if (containsAny(lower, SYMBOL_FONTS)) {
-                impossible.add(name + " (symbol font)");
+                impossible.add(I18n.t("fontemb.symbolFont", name));
             } else {
                 jobs.add(new Job(font, name, chooseVariant(name, descriptor(font))));
             }
         }
         if (!impossible.isEmpty())
-            throw new FontEmbedException("These fonts are not embedded and have no substitute: "
-                    + String.join(", ", impossible));
+            throw new FontEmbedException(I18n.t("fontemb.noSubstitute", String.join(", ", impossible)));
         if (cidFonts.isEmpty())
             return run(document, jobs);
 
@@ -446,9 +446,9 @@ public final class PdfFontEmbedder {
      */
     private static String cidReason(COSDictionary font) {
         if (!(font.getDictionaryObject(COSName.ENCODING) instanceof COSName n) || !"Identity-H".equals(n.getName()))
-            return "only fonts with the encoding Identity-H are supported";
+            return I18n.t("fontemb.onlyIdentityH");
         if (!(font.getDictionaryObject(COSName.TO_UNICODE) instanceof COSStream))
-            return "without a ToUnicode table the characters of the font are unknown";
+            return I18n.t("fontemb.noToUnicode");
         if (descendant(font) == null)
             return "the font has no descendant font";
         return null;
@@ -522,12 +522,12 @@ public final class PdfFontEmbedder {
             plan.unicodeOfCid.put(code, u);
         }
         if (!missing.isEmpty())
-            throw new FontEmbedException("Font " + name + ": these characters are not in " + variant.displayName() + ": "
-                    + String.join(" ", missing.stream().limit(12).toList()) + (missing.size() > 12 ? " ..." : ""));
+            throw new FontEmbedException(I18n.t("fontemb.missing", name, variant.displayName(),
+                    String.join(" ", missing.stream().limit(12).toList()) + (missing.size() > 12 ? " ..." : "")));
         if (unknown > 0)
-            throw new FontEmbedException("Font " + name + ": " + unknown + " characters have no Unicode value in the font.");
+            throw new FontEmbedException(I18n.t("fontemb.noUnicode", name, unknown));
         if (plan.unicodeOfCid.isEmpty())
-            throw new FontEmbedException("Font " + name + ": no characters found.");
+            throw new FontEmbedException(I18n.t("fontemb.noChars", name));
         return plan;
     }
 
@@ -663,8 +663,7 @@ public final class PdfFontEmbedder {
                     if (u >= 0 && (Character.isISOControl(u) || Character.isWhitespace(u) || Character.isSpaceChar(u)))
                         u = ' ';
                     else
-                        throw new FontEmbedException("Font " + plan.name + ": no glyph in " + variant.displayName()
-                                + " for \"" + e.getValue() + "\"");
+                        throw new FontEmbedException(I18n.t("fontemb.noGlyph", plan.name, variant.displayName(), String.valueOf(e.getValue())));
                 }
                 plan.unicodeOfCid.put(e.getKey(), u);
             }

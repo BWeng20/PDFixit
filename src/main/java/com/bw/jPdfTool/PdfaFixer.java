@@ -67,7 +67,7 @@ final class PdfaFixer {
         if (!d.containsKey(key))
             return false;
         d.removeItem(key);
-        changed("Removed forbidden entry /" + key.getName(), 1);
+        changed(I18n.t("fixer.forbiddenEntry", key.getName()), 1);
         return true;
     }
 
@@ -75,7 +75,7 @@ final class PdfaFixer {
         COSName ri = d.getCOSName(key);
         if (ri != null && !RENDERING_INTENTS.contains(ri.getName())) {
             d.setItem(key, COSName.getPDFName("RelativeColorimetric"));
-            changed("Replaced unknown rendering intent", 1);
+            changed(I18n.t("fixer.renderingIntent"), 1);
         }
     }
 
@@ -84,7 +84,7 @@ final class PdfaFixer {
             COSName type = action.getCOSName(COSName.S);
             if (type != null && FORBIDDEN_ACTIONS.contains(type.getName())) {
                 d.removeItem(key);
-                changed("Removed forbidden action " + type.getName(), 1);
+                changed(I18n.t("fixer.forbiddenAction", type.getName()), 1);
             }
         }
     }
@@ -125,7 +125,7 @@ final class PdfaFixer {
             if (config.getString(COSName.NAME) == null) {
                 config.setString(COSName.NAME, config == ocProperties.getDictionaryObject(COSName.D) ? "Default"
                         : "Config " + configs.indexOf(config));
-                changed("Added missing name to optional content configuration", 1);
+                changed(I18n.t("fixer.ocName"), 1);
             }
             if (config.getDictionaryObject(ORDER) instanceof COSArray order) {
                 Set<COSBase> found = Collections.newSetFromMap(new IdentityHashMap<>());
@@ -137,7 +137,7 @@ final class PdfaFixer {
                         ++added;
                     }
                 if (added > 0)
-                    changed("Added missing OCGs to optional content order", added);
+                    changed(I18n.t("fixer.ocOrder"), added);
             }
         }
     }
@@ -157,7 +157,7 @@ final class PdfaFixer {
     private void fixImage(COSDictionary image) {
         if (image.getBoolean(COSName.INTERPOLATE, false)) {
             image.setBoolean(COSName.INTERPOLATE, false);
-            changed("Disabled image interpolation", 1);
+            changed(I18n.t("fixer.interpolation"), 1);
         }
         remove(image, ALTERNATES);
         remove(image, OPI);
@@ -206,7 +206,7 @@ final class PdfaFixer {
                     int fixedFlags = (f | FLAG_PRINT) & ~(FLAG_HIDDEN | FLAG_NOVIEW);
                     if (fixedFlags != f) {
                         annot.setInt(COSName.F, fixedFlags);
-                        changed("Fixed annotation flags (printable, visible)", 1);
+                        changed(I18n.t("fixer.annotFlags"), 1);
                     }
                 }
     }
@@ -312,7 +312,7 @@ final class PdfaFixer {
             try (OutputStream os = s.createOutputStream(COSName.FLATE_DECODE)) {
                 new ContentStreamWriter(os).writeTokens(tokens);
             }
-            changed("Disabled inline image interpolation", n);
+            changed(I18n.t("fixer.inlineInterpolation"), n);
         }
     }
 

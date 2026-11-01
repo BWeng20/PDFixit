@@ -37,6 +37,11 @@ public class Preferences {
     public final static String USER_PREF_LAST_IMAGE_DIR = "last-image-dir";
 
     /**
+     * User preferences key for the language of the user interface (language code, absent for the system language).
+     */
+    public final static String USER_PREF_LANGUAGE = "language";
+
+    /**
      * User preferences key for the last Look And Feel selected.
      */
     public final static String USER_PREF_LAF = "laf";

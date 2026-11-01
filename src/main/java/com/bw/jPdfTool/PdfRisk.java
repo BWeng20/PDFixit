@@ -39,28 +39,28 @@ public final class PdfRisk {
         List<String> result = new ArrayList<>();
 
         if (data != null && hasBrokenXref(data))
-            result.add("The file is damaged. It was repaired while reading, so content may be missing or wrong.");
+            result.add(I18n.t("risk.damaged"));
 
         if (document.isEncrypted()) {
             AccessPermission ap = document.getCurrentAccessPermission();
-            StringBuilder s = new StringBuilder("The file is encrypted. The protection is removed");
+            StringBuilder s = new StringBuilder(I18n.t("risk.encrypted"));
             if (ap != null && !ap.isOwnerPermission()) {
                 List<String> denied = new ArrayList<>();
                 if (!ap.canPrint())
-                    denied.add("printing");
+                    denied.add(I18n.t("risk.denied.print"));
                 if (!ap.canModify())
-                    denied.add("modification");
+                    denied.add(I18n.t("risk.denied.modify"));
                 if (!ap.canExtractContent())
-                    denied.add("copying");
+                    denied.add(I18n.t("risk.denied.copy"));
                 if (!denied.isEmpty())
-                    s.append(" (it denied ").append(String.join(", ", denied)).append(")");
+                    s.append(" (").append(I18n.t("risk.denied", String.join(", ", denied))).append(")");
             }
             result.add(s.append(".").toString());
         }
 
         try {
             if (!document.getSignatureDictionaries().isEmpty())
-                result.add("The file is signed. Saving the changes invalidates the signature.");
+                result.add(I18n.t("risk.signed"));
         } catch (RuntimeException e) {
             Log.debug("Signature check failed: %s", e.getMessage());
         }
@@ -68,15 +68,14 @@ public final class PdfRisk {
         try {
             PDAcroForm form = document.getDocumentCatalog().getAcroForm();
             if (form != null && form.hasXFA())
-                result.add("The file contains an XFA form. XFA is not supported: merging, redacting and converting"
-                        + " to images drop the form.");
+                result.add(I18n.t("risk.xfa"));
         } catch (RuntimeException e) {
             Log.debug("Form check failed: %s", e.getMessage());
         }
 
         try {
             if (hasUnsupportedImages(document))
-                result.add("The file contains JBIG2 or JPEG 2000 images. They may be shown blank.");
+                result.add(I18n.t("risk.images"));
         } catch (RuntimeException e) {
             Log.debug("Image check failed: %s", e.getMessage());
         }
@@ -86,8 +85,9 @@ public final class PdfRisk {
     /**
      * The warning for operations which remove the tags of a tagged PDF.
      */
-    public static final String TAGS_LOST =
-            "Tagged PDF (accessibility structure): merging, splitting, redacting and converting to images remove the tags.";
+    public static String tagsLostWarning() {
+        return I18n.t("risk.tagsLost");
+    }
 
     /**
      * Checks if the document has a structure tree (is a tagged PDF).
@@ -106,10 +106,10 @@ public final class PdfRisk {
      *
      * @param tagged True if a document, which went into the operation, was tagged.
      * @param result The result of the operation, null if it has no tags (e.g. redacted pages).
-     * @return A list with {@link #TAGS_LOST} if the input was tagged and the result is not, otherwise an empty list.
+     * @return A list with {@link #tagsLostWarning()} if the input was tagged and the result is not, otherwise an empty list.
      */
     public static List<String> tagsLost(boolean tagged, PDDocument result) {
-        return tagged && !isTagged(result) ? List.of(TAGS_LOST) : List.of();
+        return tagged && !isTagged(result) ? List.of(tagsLostWarning()) : List.of();
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.ui.invoice;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.ui.CollapsibleTextPanel;
 import com.bw.jPdfTool.invoice.EInvoice;
 import javax.swing.BorderFactory;
@@ -29,8 +30,8 @@ public class ValidationDialog extends JDialog {
     private final CollapsibleTextPanel details;
 
     private ValidationDialog(Window owner, EInvoice.Validation validation) {
-        super(owner, "Invoice Validation", Dialog.ModalityType.APPLICATION_MODAL);
-        details = new CollapsibleTextPanel(detailText(validation), "Show details", "Hide details", false);
+        super(owner, I18n.t("validation.title"), Dialog.ModalityType.APPLICATION_MODAL);
+        details = new CollapsibleTextPanel(detailText(validation), I18n.t("details.show"), I18n.t("details.hide"), false);
         setContentPane(createContent(validation));
         pack();
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
@@ -71,12 +72,8 @@ public class ValidationDialog extends JDialog {
     static String summary(EInvoice.Validation validation) {
         int[] c = count(validation);
         if (c[0] == 0 && c[1] == 0)
-            return validation.valid() ? "No errors or warnings." : "See the details for the reason.";
-        return plural(c[0], "error") + ", " + plural(c[1], "warning");
-    }
-
-    private static String plural(int n, String word) {
-        return n + " " + word + (n == 1 ? "" : "s");
+            return validation.valid() ? I18n.t("validation.none") : I18n.t("validation.seeDetails");
+        return I18n.t("validation.counts", c[0], c[1]);
     }
 
     private JPanel createContent(EInvoice.Validation validation) {
@@ -85,8 +82,8 @@ public class ValidationDialog extends JDialog {
 
         // Verdict: indicator icon left of the bold result.
         JLabel result = new JLabel(validation.valid()
-                ? "The document is a valid e-invoice."
-                : "The document is NOT a valid e-invoice.");
+                ? I18n.t("validation.valid")
+                : I18n.t("validation.invalid"));
         // Standard icons of the look and feel, as in message dialogs. Swing has no "OK" icon, information is the closest.
         result.setIcon(UIManager.getIcon(validation.valid() ? "OptionPane.informationIcon" : "OptionPane.errorIcon"));
         result.setIconTextGap(10);
@@ -110,7 +107,7 @@ public class ValidationDialog extends JDialog {
         center.add(head, BorderLayout.NORTH);
         center.add(details, BorderLayout.CENTER);
 
-        JButton close = new JButton("Close");
+        JButton close = new JButton(I18n.t("about.close"));
         close.addActionListener(e -> dispose());
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.TRAILING, 0, 0));
         buttons.add(close);
@@ -127,7 +124,7 @@ public class ValidationDialog extends JDialog {
             validation.messages().forEach(m -> sb.append(m).append('\n'));
             sb.append('\n');
         }
-        sb.append("Validation report:\n").append(validation.report());
+        sb.append(I18n.t("validation.report")).append(validation.report());
         return sb.toString();
     }
 }

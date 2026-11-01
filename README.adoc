@@ -2,6 +2,8 @@
 
 Apache PDFBox based tool to modify PDFs without paying any money.
 
+(Deutsche Version: link:README.de.adoc[README.de.adoc])
+
 This project began when I needed to protect a scanned PDF for an email, but the HP Scanner software couldn’t handle it. My old Brother scanner had this feature - plus other useful tools - and (by the way) worked without requiring any registration. +
 Rather than paying for Adobe or other commercial solutions, I turned to the PDFBox documentation.  +
 I had used PDFBox in previous commercial projects, though I’d never dealt with PDF protection before.
@@ -125,6 +127,14 @@ Saves your modified PDF.
 === Split into Multiple Documents
 
 Export the PDF into separate documents.
+
+=== Language of the User Interface
+
+The menu _Options > Language_ sets the language of the user interface: the system default or one of the bundled languages (currently English and German). +
+After a change the program asks whether to restart right away. A restart carries a loaded document, including its unwritten changes, over to the new window. +
+The command line uses the same language. The system property `jpdftool.lang` (e.g. `-Djpdftool.lang=en`) sets it for one call.
+
+*More languages:* create the file `messages_<code>.properties` (UTF-8) in `src/main/resources`, translate all keys of `messages.properties` and add the code to the key `lang.available`. The test `I18nTest` checks that no key is missing and the placeholders match. For the manual add `README.<code>.adoc`, which becomes `manual_<code>.pdf`.
 
 === Switch "Look-And-Feels"
 

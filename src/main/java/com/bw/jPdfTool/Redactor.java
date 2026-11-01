@@ -101,15 +101,13 @@ public final class Redactor {
     public static String textSearchWarning(List<Integer> pages) {
         if (pages.isEmpty())
             return null;
-        StringBuilder s = new StringBuilder(pages.size() == 1 ? "Page " : "Pages ");
+        StringBuilder s = new StringBuilder(I18n.t(pages.size() == 1 ? "redactor.page" : "redactor.pages") + " ");
         int shown = Math.min(pages.size(), 10);
         for (int i = 0; i < shown; ++i)
             s.append(i == 0 ? "" : ", ").append(pages.get(i));
         if (shown < pages.size())
-            s.append(", … (").append(pages.size()).append(" in total)");
-        return s.append(pages.size() == 1 ? " has" : " have")
-                .append(" no extractable text (scan?). The text search finds nothing there,"
-                        + " mark such areas by hand.").toString();
+            s.append(", … (").append(I18n.t("redactor.total", pages.size())).append(")");
+        return s.append(" ").append(I18n.t(pages.size() == 1 ? "redactor.noText.one" : "redactor.noText.many")).toString();
     }
 
     /**

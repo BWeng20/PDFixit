@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.ui;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.Log;
 import com.bw.jPdfTool.Preferences;
 import com.bw.jPdfTool.Redactor;
@@ -57,15 +58,15 @@ public final class RedactionDialog extends JDialog {
 
     private final AreaCanvas canvas = new AreaCanvas();
     private final JTextField searchField = new JTextField(20);
-    private final JCheckBox allPages = new JCheckBox("All pages");
+    private final JCheckBox allPages = new JCheckBox(I18n.t("redact.allPages"));
     private final JLabel info = new JLabel();
-    private final JButton colorButton = new JButton("Color…");
-    private final JButton removeButton = new JButton("Remove");
-    private final JButton resetButton = new JButton("Reset");
-    private final JButton applyButton = new JButton("Redact");
+    private final JButton colorButton = new JButton(I18n.t("redact.color"));
+    private final JButton removeButton = new JButton(I18n.t("redact.remove"));
+    private final JButton resetButton = new JButton(I18n.t("redact.reset"));
+    private final JButton applyButton = new JButton(I18n.t("ui.redact"));
 
     private RedactionDialog(Window owner, PDDocument document, int pageNb) throws java.io.IOException {
-        super(owner, "Redact Page " + pageNb, Dialog.ModalityType.APPLICATION_MODAL);
+        super(owner, I18n.t("redact.title", pageNb), Dialog.ModalityType.APPLICATION_MODAL);
         this.document = document;
         this.pageNb = pageNb;
 
@@ -112,13 +113,11 @@ public final class RedactionDialog extends JDialog {
         JPanel main = new JPanel(new BorderLayout(0, 5));
         main.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
 
-        JLabel hint = new JLabel("<html>Drag with the mouse to mark areas. Click an area to select it, then move it, " +
-                "resize it at its edges or remove it (Delete key).<br>Marked areas are <b>permanently</b> removed " +
-                "and the page is converted to an image.</html>", SwingConstants.CENTER);
+        JLabel hint = new JLabel(I18n.t("redact.hint"), SwingConstants.CENTER);
         hint.setIconTextGap(0);
         // Help button in the upper right corner, like in the main window.
         JButton help = new JButton(javax.swing.UIManager.getIcon("OptionPane.questionIcon"));
-        help.setToolTipText("How redaction works");
+        help.setToolTipText(I18n.t("redact.help.tip"));
         help.addActionListener(e -> showHelp());
 
         JPanel north = new JPanel(new BorderLayout(0,0));
@@ -130,25 +129,25 @@ public final class RedactionDialog extends JDialog {
         JPanel south = new JPanel(new BorderLayout(0, 5));
 
         JPanel search = new JPanel(new FlowLayout(FlowLayout.LEADING));
-        JLabel searchLabel = new JLabel("Text (regular expression)");
+        JLabel searchLabel = new JLabel(I18n.t("redact.text"));
         searchLabel.setLabelFor(searchField);
-        JButton searchButton = new JButton("Find");
-        searchButton.setToolTipText("Marks all matches of the expression.");
+        JButton searchButton = new JButton(I18n.t("redact.find"));
+        searchButton.setToolTipText(I18n.t("redact.find.tip"));
         searchButton.addActionListener(e -> doSearch());
         searchField.addActionListener(e -> doSearch());
-        allPages.setToolTipText("Search all pages, not only this one.");
+        allPages.setToolTipText(I18n.t("redact.allPages.tip"));
         search.add(searchLabel);
         search.add(searchField);
         search.add(allPages);
         search.add(searchButton);
         south.add(search, BorderLayout.NORTH);
 
-        colorButton.setToolTipText("Color of the redacted areas (also available in the options menu).");
+        colorButton.setToolTipText(I18n.t("redact.color.tip"));
         colorButton.addActionListener(e -> {
             if (chooseColor(this))
                 canvas.setColor(Preferences.getInstance().getRedactionColor());
         });
-        removeButton.setToolTipText("Removes the selected area.");
+        removeButton.setToolTipText(I18n.t("redact.remove.tip"));
         removeButton.setEnabled(false);
         removeButton.addActionListener(e -> {
             int selected = canvas.getSelected();
@@ -164,7 +163,7 @@ public final class RedactionDialog extends JDialog {
             confirmed = true;
             dispose();
         });
-        JButton cancel = new JButton("Cancel");
+        JButton cancel = new JButton(I18n.t("common.cancel"));
         cancel.addActionListener(e -> dispose());
 
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.TRAILING));
@@ -183,34 +182,8 @@ public final class RedactionDialog extends JDialog {
 
     private void showHelp() {
         JOptionPane.showMessageDialog(this,
-                "<html><font size='+2'><b>How Redaction Works</b></font><br><br>" +
-                        "<font size='+1'>" +
-                        "Simply drawing a black box over text doesn't remove it: the text is still in the file<br>" +
-                        "and can be copied or extracted. This tool therefore works differently:" +
-                        "<ol>" +
-                        "<li>Each page with marked areas is <b>rendered to an image</b> (resolution from<br>" +
-                        "<i>Options / Render Quality</i>).</li>" +
-                        "<li>The marked areas are <b>painted</b> into that image with the selected color.</li>" +
-                        "<li>The original page is <b>replaced</b> by the image.</li>" +
-                        "</ol>" +
-                        "All text, vector graphics and images of a redacted page are really gone - not only<br>" +
-                        "what is below the boxes. Pages without marked areas are not changed.<br><br>" +
-                        "<b>Consequences for redacted pages:</b>" +
-                        "<ul>" +
-                        "<li>Text can no longer be selected or searched (no OCR is done).</li>" +
-                        "<li>Links, comments and form fields on the page are dropped.</li>" +
-                        "<li>The file gets bigger, depending on the resolution.</li>" +
-                        "</ul>" +
-                        "<b>Not removed</b> - check these yourself:" +
-                        "<ul>" +
-                        "<li>Bookmarks (outline) and document information (title, author, ...) and XMP metadata.</li>" +
-                        "<li>Attached files. An e-invoice is detected, you are asked what to do with it.</li>" +
-                        "<li>Values of form fields: they are stored outside the page.</li>" +
-                        "</ul>" +
-                        "<b>Text search</b> only finds real text. Text inside images (e.g. scanned pages)<br>" +
-                        "is not found, mark such areas with the mouse." +
-                        "</font></html>",
-                "Help", JOptionPane.INFORMATION_MESSAGE);
+                I18n.t("redact.help.text"),
+                I18n.t("common.help"), JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void addViewArea(Rectangle2D viewArea) {
@@ -239,7 +212,7 @@ public final class RedactionDialog extends JDialog {
             List<Redactor.Region> found = Redactor.findText(document, Pattern.compile(text));
             String warning = Redactor.textSearchWarning(Redactor.pagesWithoutText(document));
             if (warning != null)
-                JOptionPane.showMessageDialog(this, warning, "Find", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(this, warning, I18n.t("redact.find"), JOptionPane.WARNING_MESSAGE);
             int added = 0;
             for (Redactor.Region r : found) {
                 if (allPages.isSelected() || r.pageNb == pageNb) {
@@ -249,13 +222,13 @@ public final class RedactionDialog extends JDialog {
             }
             updateState();
             if (added == 0) {
-                JOptionPane.showMessageDialog(this, "No match found.", "Find", JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.showMessageDialog(this, I18n.t("redact.noMatch"), I18n.t("redact.find"), JOptionPane.INFORMATION_MESSAGE);
             }
         } catch (PatternSyntaxException e) {
-            JOptionPane.showMessageDialog(this, e.getDescription(), "Illegal expression", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, e.getDescription(), I18n.t("redact.illegalExpression"), JOptionPane.ERROR_MESSAGE);
         } catch (Exception e) {
             Log.exception(e);
-            JOptionPane.showMessageDialog(this, e.getMessage(), "Search failed", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, e.getMessage(), I18n.t("redact.searchFailed"), JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -277,8 +250,8 @@ public final class RedactionDialog extends JDialog {
         canvas.setAreas(onPage);
 
         int others = regions.size() - onPage.size();
-        info.setText(others == 0 ? onPage.size() + " areas"
-                : onPage.size() + " areas (+" + others + " on other pages)");
+        info.setText(others == 0 ? I18n.t("redact.areas", onPage.size())
+                : I18n.t("redact.areasOthers", onPage.size(), others));
         resetButton.setEnabled(!onPage.isEmpty());
         applyButton.setEnabled(!regions.isEmpty());
     }
@@ -291,7 +264,7 @@ public final class RedactionDialog extends JDialog {
      */
     public static boolean chooseColor(Component parent) {
         Preferences prefs = Preferences.getInstance();
-        Color color = JColorChooser.showDialog(parent, "Color of Redacted Areas", prefs.getRedactionColor());
+        Color color = JColorChooser.showDialog(parent, I18n.t("redact.colorTitle"), prefs.getRedactionColor());
         if (color == null)
             return false;
         prefs.setRedactionColor(color);
@@ -312,7 +285,7 @@ public final class RedactionDialog extends JDialog {
             dialog = new RedactionDialog(owner, document, pageNb);
         } catch (Exception e) {
             Log.exception(e);
-            JOptionPane.showMessageDialog(owner, e.getMessage(), "Failed to render page", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(owner, e.getMessage(), I18n.t("redact.renderFailed"), JOptionPane.ERROR_MESSAGE);
             return null;
         }
         dialog.setVisible(true);

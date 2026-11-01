@@ -48,7 +48,9 @@ public final class ValidationResult {
         }
     }
 
-    public static final String NOT_DECLARED_TEXT = "The document declares no PDF/A conformance.";
+    public static String notDeclaredText() {
+        return I18n.t("verify.notDeclared");
+    }
 
     private static final ValidationResult CONFORM = new ValidationResult(State.CONFORM, List.of(), null);
     private static final ValidationResult NOT_DECLARED = new ValidationResult(State.NOT_DECLARED, List.of(), null);
@@ -115,8 +117,8 @@ public final class ValidationResult {
     public List<String> toLines() {
         return switch (state) {
             case CONFORM -> List.of();
-            case NOT_DECLARED -> List.of(NOT_DECLARED_TEXT);
-            case FAILED -> List.of("The check failed: " + error);
+            case NOT_DECLARED -> List.of(notDeclaredText());
+            case FAILED -> List.of(I18n.t("verify.failed", error));
             case NOT_CONFORM -> findings.stream().map(Finding::toString).toList();
         };
     }

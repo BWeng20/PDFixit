@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.ui;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.Log;
 import com.bw.jPdfTool.ValidationResult;
 
@@ -30,9 +31,11 @@ import java.util.List;
  */
 public class VerificationResultPanel extends JPanel {
 
-    public static final String HEADING = "Verification Result (veraPDF):";
+    public static String heading() {
+        return I18n.t("verify.heading");
+    }
 
-    private static final String[] COLUMNS = {"Rule", "Message", "Count"};
+    private final String[] COLUMNS = {I18n.t("verify.col.rule"), I18n.t("verify.col.message"), I18n.t("verify.col.count")};
 
     private List<ValidationResult.Finding> findings = List.of();
     private final JTable table;
@@ -42,7 +45,7 @@ public class VerificationResultPanel extends JPanel {
     /**
      * The text of the result for the clipboard.
      */
-    private String text = HEADING;
+    private String text = heading();
 
     public VerificationResultPanel() {
         super(new BorderLayout(0, 6));
@@ -93,10 +96,10 @@ public class VerificationResultPanel extends JPanel {
         tableScroll = new JScrollPane(table);
         tableScroll.setPreferredSize(new Dimension(620, 220));
 
-        JLabel heading = new JLabel(HEADING);
+        JLabel heading = new JLabel(heading());
         heading.setFont(heading.getFont().deriveFont(Font.BOLD));
-        JButton copy = new JButton("Copy", UI.getIcon("copy"));
-        copy.setToolTipText("Copy the result as text to the clipboard");
+        JButton copy = new JButton(I18n.t("common.copy"), UI.getIcon("copy"));
+        copy.setToolTipText(I18n.t("verify.copy.tip"));
         copy.setFocusable(false);
         copy.addActionListener(e -> copyToClipboard());
         JPanel top = new JPanel(new BorderLayout());
@@ -114,15 +117,15 @@ public class VerificationResultPanel extends JPanel {
      */
     public void setResult(ValidationResult result) {
         switch (result.getState()) {
-            case CONFORM -> setMessage("No violations, the document is conform.");
-            case NOT_DECLARED -> setMessage(ValidationResult.NOT_DECLARED_TEXT);
-            case FAILED -> setMessage("The check failed: " + result.getError());
+            case CONFORM -> setMessage(I18n.t("verify.conform"));
+            case NOT_DECLARED -> setMessage(ValidationResult.notDeclaredText());
+            case FAILED -> setMessage(I18n.t("verify.failed", result.getError()));
             case NOT_CONFORM -> {
                 findings = result.getFindings();
                 ((AbstractTableModel) table.getModel()).fireTableDataChanged();
                 center.removeAll();
                 center.add(tableScroll, BorderLayout.CENTER);
-                text = HEADING + "\n" + String.join("\n", result.toLines());
+                text = heading() + "\n" + String.join("\n", result.toLines());
                 revalidate();
                 repaint();
                 SwingUtilities.invokeLater(this::updateRowHeights);
@@ -134,7 +137,7 @@ public class VerificationResultPanel extends JPanel {
         message.setText(m);
         center.removeAll();
         center.add(message, BorderLayout.NORTH);
-        text = HEADING + "\n" + m;
+        text = heading() + "\n" + m;
         revalidate();
         repaint();
     }

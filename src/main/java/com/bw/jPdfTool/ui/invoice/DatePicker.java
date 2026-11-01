@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.ui.invoice;
 
+import com.bw.jPdfTool.I18n;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JLabel;
@@ -53,12 +54,12 @@ class DatePicker extends JPanel {
 
         JPanel previous = new JPanel(new GridLayout(1, 2, 2, 0));
         previous.setOpaque(false);
-        previous.add(navigation("«", "Previous year", -12));
-        previous.add(navigation("‹", "Previous month", -1));
+        previous.add(navigation("«", I18n.t("date.prevYear"), -12));
+        previous.add(navigation("‹", I18n.t("date.prevMonth"), -1));
         JPanel next = new JPanel(new GridLayout(1, 2, 2, 0));
         next.setOpaque(false);
-        next.add(navigation("›", "Next month", 1));
-        next.add(navigation("»", "Next year", 12));
+        next.add(navigation("›", I18n.t("date.nextMonth"), 1));
+        next.add(navigation("»", I18n.t("date.nextYear"), 12));
         JPanel header = new JPanel(new BorderLayout(4, 0));
         header.setOpaque(false);
         header.add(previous, BorderLayout.WEST);
@@ -80,7 +81,7 @@ class DatePicker extends JPanel {
         }
         add(grid, BorderLayout.CENTER);
 
-        JButton today = new JButton("Today");
+        JButton today = new JButton(I18n.t("date.today"));
         today.putClientProperty("JButton.buttonType", "toolBarButton");
         today.addActionListener(e -> onPick.accept(LocalDate.now()));
         add(today, BorderLayout.SOUTH);

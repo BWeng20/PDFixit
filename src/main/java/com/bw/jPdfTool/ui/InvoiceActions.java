@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.ui;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.Log;
 import com.bw.jPdfTool.Preferences;
 import com.bw.jPdfTool.ValidationResult;
@@ -27,9 +28,9 @@ import java.util.function.Supplier;
  */
 final class InvoiceActions {
 
-    private static final String ATTACH_INVOICE = "Attach Invoice XML…";
-    private static final String ATTACH_INVOICE_TOOLTIP =
-            "Attaches a ZUGFeRD/Factur-X (CII) XML. An existing invoice is replaced.";
+    private final String ATTACH_INVOICE = I18n.t("invoice.attach");
+    private final String ATTACH_INVOICE_TOOLTIP =
+            I18n.t("invoice.attach.tip");
 
     private final UI ui;
     private final Supplier<DocumentProxy> proxySupplier;
@@ -53,12 +54,12 @@ final class InvoiceActions {
      * Creates the menu with the validations of the current document. None of them changes the document.
      */
     JMenu createValidationMenu() {
-        JMenu menu = new JMenu("Validation");
-        JMenuItem pdfa = new JMenuItem("Validate PDF/A…");
-        pdfa.setToolTipText("Checks the current document with veraPDF against the PDF/A flavour it declares.");
+        JMenu menu = new JMenu(I18n.t("menu.validation"));
+        JMenuItem pdfa = new JMenuItem(I18n.t("menu.validation.pdfa"));
+        pdfa.setToolTipText(I18n.t("menu.validation.pdfa.tip"));
         pdfa.addActionListener(e -> doValidatePdfa());
-        JMenuItem invoice = new JMenuItem("Validate Invoice…");
-        invoice.setToolTipText("Checks PDF/A-3 and the EN 16931 rules of the current document.");
+        JMenuItem invoice = new JMenuItem(I18n.t("menu.validation.invoice"));
+        invoice.setToolTipText(I18n.t("menu.validation.invoice.tip"));
         invoice.addActionListener(e -> doValidateInvoice());
         menu.add(pdfa);
         menu.add(invoice);
@@ -85,18 +86,18 @@ final class InvoiceActions {
      * Creates the menu with the e-invoice (ZUGFeRD/Factur-X) actions.
      */
     JMenu createInvoiceMenu() {
-        JMenu menu = new JMenu("Invoice");
+        JMenu menu = new JMenu(I18n.t("menu.invoice"));
 
-        JMenuItem show = new JMenuItem("Show Invoice…");
+        JMenuItem show = new JMenuItem(I18n.t("menu.invoice.show"));
         show.addActionListener(e -> doShowInvoice());
-        JMenuItem edit = new JMenuItem("Create Invoice…");
+        JMenuItem edit = new JMenuItem(I18n.t("menu.invoice.create"));
         edit.addActionListener(e -> doEditInvoice());
-        JMenuItem save = new JMenuItem("Save Invoice XML…");
+        JMenuItem save = new JMenuItem(I18n.t("menu.invoice.save"));
         save.addActionListener(e -> doSaveInvoiceXml());
         JMenuItem attach = new JMenuItem(ATTACH_INVOICE);
         attach.setToolTipText(ATTACH_INVOICE_TOOLTIP);
         attach.addActionListener(e -> doAttachInvoiceXml());
-        JMenuItem remove = new JMenuItem("Remove Invoice");
+        JMenuItem remove = new JMenuItem(I18n.t("ui.invoice.remove"));
         remove.addActionListener(e -> doRemoveInvoice());
 
         menu.add(show);
@@ -106,8 +107,8 @@ final class InvoiceActions {
         menu.add(attach);
         menu.add(remove);
         menu.addSeparator();
-        JMenuItem parties = new JMenuItem("Invoice Parties…");
-        parties.setToolTipText("Seller and buyer presets for the invoice editor.");
+        JMenuItem parties = new JMenuItem(I18n.t("menu.invoice.parties"));
+        parties.setToolTipText(I18n.t("menu.invoice.parties.tip"));
         parties.addActionListener(e -> PartySettingsDialog.showDialog(ui));
         menu.add(parties);
 
@@ -123,14 +124,13 @@ final class InvoiceActions {
                 boolean supported = hasDocument && EInvoice.supportsInvoice(proxy().getDocument());
                 attach.setEnabled(supported);
                 edit.setEnabled(supported);
-                edit.setText(hasInvoice ? "Edit Invoice…" : "Create Invoice…");
+                edit.setText(hasInvoice ? I18n.t("menu.invoice.edit") : I18n.t("menu.invoice.create"));
                 edit.setToolTipText(hasDocument && !supported
-                        ? "<html>E-invoices need PDF/A-3, which is based on PDF 1.7.<br>A PDF 2.0 document can't be conform.</html>"
-                        : "Enter the invoice data. The invoice is attached as ZUGFeRD/Factur-X XML.");
+                        ? I18n.t("invoice.needPdf17")
+                        : I18n.t("menu.invoice.create.tip"));
                 if (hasDocument && !supported) {
-                    attach.setText(ATTACH_INVOICE + " (not for PDF 2.0)");
-                    attach.setToolTipText("<html>E-invoices need PDF/A-3, which is based on PDF 1.7.<br>"
-                            + "A PDF 2.0 document can't be conform.</html>");
+                    attach.setText(ATTACH_INVOICE + I18n.t("invoice.attach.notPdf2"));
+                    attach.setToolTipText(I18n.t("invoice.needPdf17"));
                 } else {
                     attach.setText(ATTACH_INVOICE);
                     attach.setToolTipText(ATTACH_INVOICE_TOOLTIP);
@@ -165,7 +165,7 @@ final class InvoiceActions {
         String message = e.getMessage() == null ? e.toString() : e.getMessage();
         if (message.length() > 80 || message.indexOf('\n') >= 0) {
             toaster().toast(ToastType.ERROR, 10000,
-                    "<html><font size='+2'>%s</font><br><font size='+1'><i>See the details dialog</i></font></html>", what);
+                    I18n.t("invoice.seeDetails"), what);
             SwingUtilities.invokeLater(() -> showText(what, message));
         } else {
             toaster().toast(ToastType.ERROR, 20000,
@@ -179,12 +179,12 @@ final class InvoiceActions {
         try {
             var xml = EInvoice.extractXml(proxy().getDocument());
             if (xml.isEmpty()) {
-                toaster().toast(ToastType.INFO, 5000, "<html>The document contains no invoice</html>");
+                toaster().toast(ToastType.INFO, 5000, I18n.t("toast.noInvoice"));
                 return;
             }
             InvoiceDialog.showDialog(ui, xml.get());
         } catch (IOException e) {
-            invoiceError("Failed to read invoice", e);
+            invoiceError(I18n.t("invoice.readFailed"), e);
         }
     }
 
@@ -198,11 +198,11 @@ final class InvoiceActions {
         try {
             xml = EInvoice.extractXml(proxy().getDocument()).orElse(null);
         } catch (IOException e) {
-            invoiceError("Failed to read invoice", e);
+            invoiceError(I18n.t("invoice.readFailed"), e);
             return;
         }
         if (InvoiceEditorDialog.showDialog(ui, xml, proxy()))
-            toaster().toast(ToastType.SUCCESS, 5000, "<html>%s invoice</html>", xml == null ? "Attached" : "Updated");
+            toaster().toast(ToastType.SUCCESS, 5000, xml == null ? I18n.t("toast.invoice.attached") : I18n.t("toast.invoice.updated"));
     }
 
     void doValidateInvoice() {
@@ -213,7 +213,7 @@ final class InvoiceActions {
                 EInvoice.Validation v = EInvoice.validate(proxy().getBytes(), "current document");
                 SwingUtilities.invokeLater(() -> ValidationDialog.showDialog(ui, v));
             } catch (Exception e) {
-                invoiceError("Validation failed", e);
+                invoiceError(I18n.t("invoice.validationFailed"), e);
             }
         });
     }
@@ -230,14 +230,14 @@ final class InvoiceActions {
                 SwingUtilities.invokeLater(() -> {
                     VerificationResultPanel panel = new VerificationResultPanel();
                     panel.setResult(result);
-                    JOptionPane.showMessageDialog(ui, panel, "PDF/A", switch (result.getState()) {
+                    JOptionPane.showMessageDialog(ui, panel, I18n.t("common.pdfa"), switch (result.getState()) {
                         case CONFORM -> JOptionPane.INFORMATION_MESSAGE;
                         case NOT_DECLARED -> JOptionPane.WARNING_MESSAGE;
                         default -> JOptionPane.ERROR_MESSAGE;
                     });
                 });
             } catch (Exception e) {
-                invoiceError("Validation failed", e);
+                invoiceError(I18n.t("invoice.validationFailed"), e);
             }
         });
     }
@@ -250,10 +250,10 @@ final class InvoiceActions {
         chooser.setFileFilter(new FileNameExtensionFilter("XML", "xml"));
         chooser.setMultiSelectionEnabled(false);
         if (save) {
-            chooser.setDialogTitle("Save Invoice XML…");
+            chooser.setDialogTitle(I18n.t("menu.invoice.save"));
             chooser.setSelectedFile(new File(chooser.getCurrentDirectory(), "factur-x.xml"));
         } else {
-            chooser.setDialogTitle("Select Invoice XML…");
+            chooser.setDialogTitle(I18n.t("chooser.invoiceXml"));
         }
         int result = save ? chooser.showSaveDialog(ui) : chooser.showOpenDialog(ui);
         return result == JFileChooser.APPROVE_OPTION ? chooser.getSelectedFile() : null;
@@ -269,10 +269,10 @@ final class InvoiceActions {
             File file = chooseXml(true);
             if (file != null && (!file.exists() || UI.askOverwrite(ui, file.toPath()))) {
                 Files.write(file.toPath(), xml.get());
-                toaster().toast(ToastType.SUCCESS, 5000, "<html>Stored invoice to<br><i>%s</i></html>", file.getName());
+                toaster().toast(ToastType.SUCCESS, 5000, I18n.t("toast.invoice.stored"), file.getName());
             }
         } catch (IOException e) {
-            invoiceError("Failed to store invoice", e);
+            invoiceError(I18n.t("invoice.storeFailed"), e);
         }
     }
 
@@ -284,9 +284,9 @@ final class InvoiceActions {
             ui.runInBusy(() -> {
                 try {
                     proxy().attachInvoice(Files.readAllBytes(file.toPath()));
-                    toaster().toast(ToastType.SUCCESS, 5000, "<html>Attached invoice<br><i>%s</i></html>", file.getName());
+                    toaster().toast(ToastType.SUCCESS, 5000, I18n.t("toast.invoice.attachedFile"), file.getName());
                 } catch (Exception e) {
-                    invoiceError("Failed to attach invoice", e);
+                    invoiceError(I18n.t("invoice.attachFailed"), e);
                 }
             });
         }
@@ -297,9 +297,9 @@ final class InvoiceActions {
             return;
         try {
             if (proxy().removeInvoice())
-                toaster().toast(ToastType.SUCCESS, 5000, "<html>Removed invoice</html>");
+                toaster().toast(ToastType.SUCCESS, 5000, I18n.t("toast.invoice.removed"));
         } catch (IOException e) {
-            invoiceError("Failed to remove invoice", e);
+            invoiceError(I18n.t("ui.invoice.removeFailed"), e);
         }
     }
 }

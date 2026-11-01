@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.fonts;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.Log;
 import org.apache.fontbox.ttf.OS2WindowsMetricsTable;
 import org.apache.fontbox.ttf.TTFParser;
@@ -60,23 +61,22 @@ public final class ImportedFont implements FontSource {
     @Override
     public TrueTypeFont open() throws IOException {
         if (!exists())
-            throw new FontEmbedException("The font file doesn't exist any more: " + path);
+            throw new FontEmbedException(I18n.t("fonts.fileGone", path));
         byte[] data = Files.readAllBytes(path);
         if (data.length > 4 && "ttcf".equals(new String(data, 0, 4, StandardCharsets.ISO_8859_1)))
-            throw new FontEmbedException(path.getFileName() + " is a font collection (.ttc), which is not supported.");
+            throw new FontEmbedException(I18n.t("font.collection", path.getFileName()));
         TrueTypeFont ttf;
         try {
             ttf = new TTFParser().parse(new RandomAccessReadBuffer(data));
         } catch (IOException | RuntimeException e) {
-            throw new FontEmbedException(path.getFileName() + " is no usable TrueType font: " + e.getMessage());
+            throw new FontEmbedException(I18n.t("font.unusable", path.getFileName(), e.getMessage()));
         }
         try {
             if (!ttf.getTableMap().containsKey("glyf"))
-                throw new FontEmbedException(path.getFileName()
-                        + " has PostScript outlines (OpenType/CFF). Only fonts with TrueType outlines are supported.");
+                throw new FontEmbedException(I18n.t("font.postscript", path.getFileName()));
             OS2WindowsMetricsTable os2 = ttf.getOS2Windows();
             if (os2 != null && !embeddingAllowed(os2.getFsType()))
-                throw new FontEmbedException(path.getFileName() + " doesn't allow to be embedded into documents.");
+                throw new FontEmbedException(I18n.t("font.noEmbedding", path.getFileName()));
             // The characters are found through this table.
             ttf.getUnicodeCmapLookup();
         } catch (FontEmbedException e) {
@@ -84,7 +84,7 @@ public final class ImportedFont implements FontSource {
             throw e;
         } catch (IOException | RuntimeException e) {
             ttf.close();
-            throw new FontEmbedException(path.getFileName() + " is no usable TrueType font: " + e.getMessage());
+            throw new FontEmbedException(I18n.t("font.unusable", path.getFileName(), e.getMessage()));
         }
         return ttf;
     }

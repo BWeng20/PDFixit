@@ -20,6 +20,13 @@ public final class Manual {
     static final String FILE_NAME = "manual.pdf";
 
     /**
+     * Name of the PDF in another language, e.g. {@code manual_de.pdf}. The language is the one of the user interface.
+     */
+    static String fileName(String language) {
+        return "manual_" + language + ".pdf";
+    }
+
+    /**
      * System property with the path of the PDF, used if the program is not started from a distribution
      * (e.g. by the Gradle task "run").
      */
@@ -38,8 +45,10 @@ public final class Manual {
         if (configured != null && !configured.isBlank()) {
             try {
                 Path p = Path.of(configured);
-                if (Files.isRegularFile(p))
-                    return p;
+                if (Files.isRegularFile(p)) {
+                    Path localized = localized(p.toAbsolutePath().getParent());
+                    return localized != null ? localized : p;
+                }
             } catch (InvalidPathException e) {
                 Log.debug("Bad path in %s: %s", PROPERTY, e.getMessage());
             }
@@ -77,11 +86,29 @@ public final class Manual {
             if (parent != null)
                 folders.add(parent);
             for (Path folder : folders) {
+                Path localized = localized(folder);
+                if (localized != null)
+                    return localized;
                 Path file = folder.resolve(FILE_NAME);
                 if (Files.isRegularFile(file))
                     return file;
             }
         }
         return null;
+    }
+
+    /**
+     * The manual in the language of the user interface.
+     *
+     * @return The file, null if the language is English (the default) or the folder has no manual in that language.
+     */
+    private static Path localized(Path folder) {
+        if (folder == null)
+            return null;
+        String language = I18n.getLocale().getLanguage();
+        if (language.isEmpty() || language.equals("en"))
+            return null;
+        Path file = folder.resolve(fileName(language));
+        return Files.isRegularFile(file) ? file : null;
     }
 }

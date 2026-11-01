@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.ui;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.Log;
 import com.bw.jPdfTool.PdfRisk;
 import com.bw.jPdfTool.model.DocumentProxy;
@@ -55,11 +56,11 @@ public class UIPdfLoadWorker extends SwingWorker<PDDocument, Void> implements Pd
             document.setAllSecurityToBeRemoved(true);
             return document;
         } catch (InvalidPasswordException ep) {
-            documentProxy.error = "File is encrypted and owner password\ndoesn't match";
+            documentProxy.error = I18n.t("load.wrongPassword");
             passwordNeeded = true;
             return null;
         } catch (NoSuchFileException fe) {
-            documentProxy.error = String.format("File '%s' does not exist", file.getFileName());
+            documentProxy.error = I18n.t("load.notExist", file.getFileName());
             return null;
         } catch (Exception e) {
             documentProxy.error = e.getMessage();
@@ -72,9 +73,9 @@ public class UIPdfLoadWorker extends SwingWorker<PDDocument, Void> implements Pd
      */
     protected void requestOwnerPassword(Path file, MergeOptions mo, Consumer<PDDocument> consumer) {
         SwingUtilities.invokeLater(() -> {
-            Object[] message = {"Enter Owner Password:", passwordField};
+            Object[] message = {I18n.t("load.enterPassword"), passwordField};
             int option = JOptionPane.showConfirmDialog(
-                    null, message, "Owner Password needed",
+                    null, message, I18n.t("load.passwordNeeded"),
                     JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE
             );
 
@@ -84,7 +85,7 @@ public class UIPdfLoadWorker extends SwingWorker<PDDocument, Void> implements Pd
                 documentProxy.loadWorker.add(new UIPdfLoadWorker(documentProxy, file, pw, mo, consumer));
                 documentProxy.startNextLoader();
             } else {
-                documentProxy.error = "File is protected.\nPassword needed.";
+                documentProxy.error = I18n.t("load.protected");
                 documentProxy.fireDocumentLoaded();
             }
         });

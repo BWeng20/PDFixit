@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.ui.invoice;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.invoice.InvoiceData;
 import com.bw.jPdfTool.invoice.Party;
 import com.bw.jPdfTool.invoice.PartyPresets;
@@ -68,7 +69,7 @@ class PresetChooser extends JPanel {
                 return super.getListCellRendererComponent(list, text, index, isSelected, cellHasFocus);
             }
         });
-        combo.setToolTipText("Fills the " + role.title.toLowerCase() + " data from a preset.");
+        combo.setToolTipText(I18n.t("preset.fill." + role.name().toLowerCase()));
         reload(PartyPresets.find(InvoiceData.loadParties(role), target, role));
         combo.addActionListener(e -> {
             if (updating)
@@ -81,8 +82,8 @@ class PresetChooser extends JPanel {
         });
 
         update.addActionListener(e -> edit(proposal()));
-        JButton manage = new JButton("Manage…");
-        manage.setToolTipText("Add, change or remove the sellers and buyers.");
+        JButton manage = new JButton(I18n.t("preset.manage"));
+        manage.setToolTipText(I18n.t("preset.manage.tip"));
         manage.addActionListener(e -> edit(null));
         INSTANCES.add(this);
 
@@ -148,10 +149,10 @@ class PresetChooser extends JPanel {
         if (p == null)
             p = Party.findBestMatch(presets, target, role);
         boolean exists = p != null;
-        update.setText(exists ? "Update…" : "Create…");
+        update.setText(exists ? I18n.t("preset.update") : I18n.t("preset.create"));
         update.setToolTipText(exists
-                ? "Opens the parties to take over the changes into \"" + PartySettingsDialog.displayName(p) + "\"."
-                : "Opens the parties to add this " + role.title.toLowerCase() + " as a new entry.");
+                ? I18n.t("preset.update.tip", PartySettingsDialog.displayName(p))
+                : I18n.t("preset.add." + role.name().toLowerCase()));
     }
 
     /**

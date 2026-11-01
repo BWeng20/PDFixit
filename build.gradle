@@ -203,6 +203,8 @@ processResources {
 
 test {
     useJUnitPlatform()
+    // The tests check English texts, whatever the language of the machine is.
+    systemProperty 'jpdftool.lang', 'en'
 }
 
 javadoc.options.addStringOption('Xdoclint:none', '-quiet')
@@ -221,7 +223,9 @@ tasks.register('copyPngs', Copy) {
 
 tasks.register('copyDoc', Copy) {
     dependsOn(copyPngs)
-    from layout.projectDirectory.file("README.adoc")
+    from(layout.projectDirectory) {
+        include "README.adoc", "README.*.adoc"
+    }
     into layout.buildDirectory.dir("doc")
 }
 
@@ -251,7 +255,7 @@ asciidoctorPdf {
 
     sourceDir  file('build/doc')
     sources {
-        include 'README.adoc'
+        include 'README.adoc', 'README.*.adoc'
     }
     outputDir = file('build/doc/pdf')
 
@@ -261,9 +265,11 @@ asciidoctorPdf {
 // distributions and when running with Gradle. asciidoctorPdf is only executed again if the README changed.
 tasks.register('bundleManual', Copy) {
     dependsOn asciidoctorPdf
+    // README.pdf is the English manual, README.de.pdf the German one (manual_de.pdf), and so on.
     from(layout.buildDirectory.dir('doc/pdf')) {
-        include 'README.pdf'
+        include 'README*.pdf'
         rename 'README.pdf', 'manual.pdf'
+        rename(/README\.(\w+)\.pdf/, 'manual_$1.pdf')
     }
     into layout.buildDirectory.dir('manual')
 }

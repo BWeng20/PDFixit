@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.ui;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.Log;
 import com.bw.jPdfTool.PdfStandard;
 import com.bw.jPdfTool.PdfStandardProfile;
@@ -54,14 +55,14 @@ public final class StandardDialog extends JDialog {
     private final byte[] pdf;
     private final PdfStandardProfile current;
     private final JLabel hints = new JLabel();
-    private final JButton apply = new JButton("Apply");
+    private final JButton apply = new JButton(I18n.t("common.apply"));
     private final List<JRadioButton> radios = new ArrayList<>();
     private final List<PdfStandardProfile> radioProfiles = new ArrayList<>();
     private SwingWorker<Hints, Void> worker;
     private Choice choice;
 
     private StandardDialog(Window owner, byte[] pdf, PdfStandardProfile current) {
-        super(owner, "PDF Standard", Dialog.ModalityType.APPLICATION_MODAL);
+        super(owner, I18n.t("ui.standard.title"), Dialog.ModalityType.APPLICATION_MODAL);
         this.pdf = pdf;
         this.current = current;
         setContentPane(createContent());
@@ -93,9 +94,9 @@ public final class StandardDialog extends JDialog {
 
         // Two columns: the PDF/A levels, and the other standards.
         JPanel pdfa = column("PDF/A");
-        JPanel other = column("Other standards");
+        JPanel other = column(I18n.t("standard.other"));
         ButtonGroup group = new ButtonGroup();
-        addRadio(pdfa, group, null, "None", "Removes the declarations of all standards. The content is not changed.");
+        addRadio(pdfa, group, null, I18n.t("standard.none"), I18n.t("standard.none.tip"));
         for (PdfStandardProfile p : PdfStandardProfile.values())
             addRadio(p.isPdfa() ? pdfa : other, group, p, p.toString(), p.description());
         JPanel list = new JPanel(new GridLayout(1, 2, 16, 0));
@@ -105,7 +106,7 @@ public final class StandardDialog extends JDialog {
 
         hints.setVerticalAlignment(JLabel.TOP);
         hints.setPreferredSize(new Dimension(520, 190));
-        hints.setBorder(BorderFactory.createTitledBorder("What happens"));
+        hints.setBorder(BorderFactory.createTitledBorder(I18n.t("standard.whatHappens")));
         content.add(hints, BorderLayout.CENTER);
 
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
@@ -113,7 +114,7 @@ public final class StandardDialog extends JDialog {
             choice = new Choice(selected());
             dispose();
         });
-        JButton cancel = new JButton("Cancel");
+        JButton cancel = new JButton(I18n.t("common.cancel"));
         cancel.addActionListener(e -> dispose());
         buttons.add(apply);
         buttons.add(cancel);
@@ -134,7 +135,7 @@ public final class StandardDialog extends JDialog {
     }
 
     private void addRadio(JPanel list, ButtonGroup group, PdfStandardProfile profile, String text, String tooltip) {
-        JRadioButton r = new JRadioButton(profile == current ? text + "  (current)" : text);
+        JRadioButton r = new JRadioButton(profile == current ? I18n.t("standard.current", text) : text);
         r.setToolTipText(tooltip);
         r.setAlignmentX(Component.LEFT_ALIGNMENT);
         r.addActionListener(e -> update());
@@ -165,12 +166,12 @@ public final class StandardDialog extends JDialog {
         if (target == current) {
             apply.setEnabled(false);
             hints.setIcon(null);
-            hints.setText("<html>This is the current level of the document.</html>");
+            hints.setText(I18n.t("standard.isCurrent"));
             return;
         }
         apply.setEnabled(false);
         hints.setIcon(null);
-        hints.setText("<html><i>Calculating...</i></html>");
+        hints.setText(I18n.t("standard.calculating"));
         worker = new SwingWorker<>() {
             @Override
             protected Hints doInBackground() throws Exception {
@@ -192,7 +193,7 @@ public final class StandardDialog extends JDialog {
                     show(get());
                 } catch (Exception e) {
                     Log.error("PDF standard preview failed: %s", e.getMessage());
-                    hints.setText("<html>The preview failed: " + escape(String.valueOf(e.getMessage())) + "</html>");
+                    hints.setText(I18n.t("standard.previewFailed", escape(String.valueOf(e.getMessage()))));
                     apply.setEnabled(true);
                 }
             }
@@ -203,21 +204,21 @@ public final class StandardDialog extends JDialog {
     private void show(Hints result) {
         StringBuilder html = new StringBuilder("<html>");
         if (result.error() != null)
-            html.append("<b>Not possible:</b> ").append(escape(result.error())).append("<br>");
+            html.append(I18n.t("standard.notPossible")).append(escape(result.error())).append("<br>");
         if (!result.impact().lost().isEmpty()) {
-            html.append("<b>Data will be lost:</b><br>");
+            html.append(I18n.t("standard.lost"));
             result.impact().lost().forEach(s -> html.append("&bull; ").append(escape(s)).append("<br>"));
         }
         if (!result.impact().notRepaired().isEmpty()) {
-            html.append("<b>Can't be repaired:</b><br>");
+            html.append(I18n.t("standard.notRepaired"));
             result.impact().notRepaired().forEach(s -> html.append("&bull; ").append(escape(s)).append("<br>"));
         }
         result.impact().info().forEach(s -> html.append("<i>").append(escape(s)).append("</i><br>"));
         if (result.error() == null) {
             if (result.changes().isEmpty()) {
-                html.append("No further changes.");
+                html.append(I18n.t("standard.noFurther"));
             } else {
-                html.append("<b>Will change:</b><br>");
+                html.append(I18n.t("standard.willChange"));
                 result.changes().forEach((what, times) -> html.append("&bull; ").append(escape(what))
                         .append(times > 1 ? " (" + times + "x)" : "").append("<br>"));
             }

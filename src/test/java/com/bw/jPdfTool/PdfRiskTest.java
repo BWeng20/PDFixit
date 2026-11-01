@@ -91,8 +91,8 @@ class PdfRiskTest {
             Assertions.assertEquals(List.of(), PdfRisk.tagsLost(true, tagged));
             Assertions.assertEquals(List.of(), PdfRisk.tagsLost(false, plain));
             // Tags gone.
-            Assertions.assertEquals(List.of(PdfRisk.TAGS_LOST), PdfRisk.tagsLost(true, plain));
-            Assertions.assertEquals(List.of(PdfRisk.TAGS_LOST), PdfRisk.tagsLost(true, null));
+            Assertions.assertEquals(List.of(PdfRisk.tagsLostWarning()), PdfRisk.tagsLost(true, plain));
+            Assertions.assertEquals(List.of(PdfRisk.tagsLostWarning()), PdfRisk.tagsLost(true, null));
             // Not part of the warnings on load.
             Assertions.assertEquals(List.of(), PdfRisk.inspect(tagged, null));
         }

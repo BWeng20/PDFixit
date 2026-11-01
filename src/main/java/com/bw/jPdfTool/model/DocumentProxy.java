@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.model;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.invoice.EInvoice;
 import com.bw.jPdfTool.DocumentInformation;
 import com.bw.jPdfTool.Log;
@@ -50,6 +51,13 @@ public class DocumentProxy {
 
     public boolean isModified() {
         return modified;
+    }
+
+    /**
+     * Marks the document as changed, e.g. if it was carried over from another instance of the user interface.
+     */
+    public void setModified() {
+        modified = true;
     }
 
     /**
@@ -433,7 +441,7 @@ public class DocumentProxy {
                 renderPageToImage(pdfRenderer, pageIndex);
                 modified = true;
                 // The page is an image now, its tags are gone.
-                reportRisks("To Image", PdfRisk.tagsLost(tagged, null));
+                reportRisks(I18n.t("risk.toImage"), PdfRisk.tagsLost(tagged, null));
                 refirePages();
             } catch (Exception e) {
                 Log.exception(e);
@@ -450,7 +458,7 @@ public class DocumentProxy {
                 renderPageToImage(pdfRenderer, pageIndex);
             }
             modified = true;
-            reportRisks("To Image", PdfRisk.tagsLost(tagged, null));
+            reportRisks(I18n.t("risk.toImage"), PdfRisk.tagsLost(tagged, null));
         } catch (Exception e) {
             Log.exception(e);
         }
@@ -472,7 +480,7 @@ public class DocumentProxy {
             modified = true;
         // The redacted pages are images now, their tags are gone.
         if (!regions.isEmpty())
-            reportRisks("Redaction", PdfRisk.tagsLost(tagged, null));
+            reportRisks(I18n.t("risk.redaction"), PdfRisk.tagsLost(tagged, null));
         synchronized (this) {
             for (Redactor.Region r : regions) {
                 Page p = pages.get(r.pageNb - 1);
@@ -568,7 +576,7 @@ public class DocumentProxy {
         IOUtils.closeQuietly(old);
         fix.fixes().forEach(f -> changes.merge("veraPDF: " + f, 1, Integer::sum));
         if (fix.fixes().isEmpty())
-            changes.merge("veraPDF: metadata fixed", 1, Integer::sum);
+            changes.merge(I18n.t("ui.fixer.fixed"), 1, Integer::sum);
         return fix;
     }
 
@@ -807,10 +815,10 @@ public class DocumentProxy {
                             PDFMergerUtility pdfMergerUtility = new PDFMergerUtility();
                             pdfMergerUtility.appendDocument(this.getDocument(), document);
                             modified = true;
-                            reportRisks("Merge", PdfRisk.tagsLost(tagged, this.getDocument()));
+                            reportRisks(I18n.t("risk.merge"), PdfRisk.tagsLost(tagged, this.getDocument()));
                         } catch (Exception e) {
                             Log.error("Failed to merge. %s", e.getMessage());
-                            this.error = "Failed to merge: " + e.getMessage();
+                            this.error = I18n.t("proxy.mergeFailed", e.getMessage());
                             oldPageCount = -1;
                         } finally {
                             IOUtils.closeQuietly(document);

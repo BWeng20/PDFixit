@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.ui.fonts;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.fonts.ImportedFont;
 import com.bw.jPdfTool.fonts.PdfFontEmbedder;
 import com.bw.jPdfTool.fonts.ImportedFonts;
@@ -45,7 +46,7 @@ public final class ImportedFontsDialog {
     }
 
     static void show(Component parent, Path store) {
-        JDialog dialog = new JDialog(SwingUtilities.getWindowAncestor(parent), "Manage Fonts",
+        JDialog dialog = new JDialog(SwingUtilities.getWindowAncestor(parent), I18n.t("fonts.manage.title"),
                 JDialog.ModalityType.APPLICATION_MODAL);
 
         DefaultListModel<ImportedFont> model = new DefaultListModel<>();
@@ -56,7 +57,7 @@ public final class ImportedFontsDialog {
                     model.addElement(new ImportedFont(e.name(), Path.of(e.path())));
             } catch (Exception e) {
                 Log.exception(e);
-                JOptionPane.showMessageDialog(dialog, e.getMessage(), "Failed to read the list", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(dialog, e.getMessage(), I18n.t("fonts.readFailed"), JOptionPane.ERROR_MESSAGE);
             }
         };
 
@@ -68,14 +69,14 @@ public final class ImportedFontsDialog {
                 String text = "";
                 if (value instanceof ImportedFont f)
                     // Only checks if the file is there, the font is not read.
-                    text = "<html><b>" + escape(f.getName()) + "</b>" + (f.exists() ? "" : " <font color='#c04040'>(file missing)</font>")
+                    text = "<html><b>" + escape(f.getName()) + "</b>" + (f.exists() ? "" : " <font color='#c04040'>(" + I18n.t("fonts.fileMissing") + ")</font>")
                             + "<br><font size='-1'>" + escape(f.getPath().toString()) + "</font></html>";
                 return super.getListCellRendererComponent(l, text, index, isSelected, cellHasFocus);
             }
         });
         JScrollPane scroll = new JScrollPane(list);
         scroll.setPreferredSize(new Dimension(560, 200));
-        scroll.setBorder(BorderFactory.createTitledBorder("Imported fonts"));
+        scroll.setBorder(BorderFactory.createTitledBorder(I18n.t("fonts.imported")));
 
         // Read only: the bundled fonts can't be changed, so nothing can be selected.
         DefaultListModel<PdfFontEmbedder.Variant> bundledModel = new DefaultListModel<>();
@@ -103,22 +104,22 @@ public final class ImportedFontsDialog {
         });
         JScrollPane bundledScroll = new JScrollPane(bundledList);
         bundledScroll.setPreferredSize(new Dimension(560, 130));
-        bundledScroll.setBorder(BorderFactory.createTitledBorder("Bundled fonts (read only)"));
+        bundledScroll.setBorder(BorderFactory.createTitledBorder(I18n.t("fonts.bundledReadOnly")));
 
-        JButton add = new JButton("Add…");
-        add.setToolTipText("Imports TrueType font files (.ttf).");
-        JButton remove = new JButton("Remove");
-        remove.setToolTipText("Removes the selected fonts from the list. The font files are not deleted.");
+        JButton add = new JButton(I18n.t("fonts.add"));
+        add.setToolTipText(I18n.t("fonts.add.tip"));
+        JButton remove = new JButton(I18n.t("redact.remove"));
+        remove.setToolTipText(I18n.t("fonts.remove.tip"));
         remove.setEnabled(false);
-        JButton close = new JButton("Close");
+        JButton close = new JButton(I18n.t("about.close"));
         close.addActionListener(e -> dialog.dispose());
         list.addListSelectionListener(e -> remove.setEnabled(!list.isSelectionEmpty()));
 
         add.addActionListener(e -> {
             JFileChooser chooser = new JFileChooser(lastDirectory);
-            chooser.setDialogTitle("Import Fonts");
+            chooser.setDialogTitle(I18n.t("fonts.import.title"));
             chooser.setMultiSelectionEnabled(true);
-            chooser.setFileFilter(new FileNameExtensionFilter("TrueType fonts (*.ttf)", "ttf"));
+            chooser.setFileFilter(new FileNameExtensionFilter(I18n.t("fonts.import.filter"), "ttf"));
             if (chooser.showOpenDialog(dialog) != JFileChooser.APPROVE_OPTION)
                 return;
             lastDirectory = chooser.getCurrentDirectory();
@@ -127,7 +128,7 @@ public final class ImportedFontsDialog {
             reload.run();
             if (!result.errors().isEmpty())
                 JOptionPane.showMessageDialog(dialog, "<html>" + String.join("<br>", result.errors().stream().map(ImportedFontsDialog::escape).toList())
-                        + "</html>", "Not imported", JOptionPane.WARNING_MESSAGE);
+                        + "</html>", I18n.t("fonts.notImported"), JOptionPane.WARNING_MESSAGE);
         });
 
         remove.addActionListener(e -> {
@@ -136,13 +137,12 @@ public final class ImportedFontsDialog {
                     ImportedFonts.remove(store, f);
             } catch (Exception ex) {
                 Log.exception(ex);
-                JOptionPane.showMessageDialog(dialog, ex.getMessage(), "Remove failed", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(dialog, ex.getMessage(), I18n.t("fonts.removeFailed"), JOptionPane.ERROR_MESSAGE);
             }
             reload.run();
         });
 
-        JLabel info = new JLabel("<html>Font files which can replace the fonts of a document, besides the bundled ones.<br>"
-                + "<font size='-1'>Only the path is stored. The file is read when the font is used.</font></html>");
+        JLabel info = new JLabel(I18n.t("fonts.manage.info"));
         info.setBorder(BorderFactory.createEmptyBorder(0, 0, 8, 0));
 
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));

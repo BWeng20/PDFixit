@@ -15,7 +15,7 @@ class ValidationResultTest {
         ValidationResult notDeclared = ValidationResult.notDeclared();
         Assertions.assertFalse(notDeclared.isConform());
         Assertions.assertEquals(ValidationResult.State.NOT_DECLARED, notDeclared.getState());
-        Assertions.assertEquals(List.of(ValidationResult.NOT_DECLARED_TEXT), notDeclared.toLines());
+        Assertions.assertEquals(List.of(ValidationResult.notDeclaredText()), notDeclared.toLines());
 
         ValidationResult failed = ValidationResult.failed("boom");
         Assertions.assertEquals(ValidationResult.State.FAILED, failed.getState());

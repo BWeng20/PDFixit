@@ -1,5 +1,6 @@
 package com.bw.jPdfTool.ui.invoice;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.invoice.InvoiceData;
 
 import javax.swing.BorderFactory;
@@ -46,7 +47,7 @@ class XmlFieldsPanel extends JPanel {
     private final JTextField filter = new JTextField(16);
     private final FieldModel model = new FieldModel();
     private final JTable table = new JTable(model);
-    private final JButton remove = new JButton("Remove");
+    private final JButton remove = new JButton(I18n.t("redact.remove"));
     private final JLabel count = new JLabel();
 
     /**
@@ -101,9 +102,9 @@ class XmlFieldsPanel extends JPanel {
         JScrollPane scroll = new JScrollPane(table);
         scroll.setPreferredSize(new Dimension(59 * em, table.getRowHeight() * 9 + table.getTableHeader().getPreferredSize().height));
 
-        filter.putClientProperty("JTextField.placeholderText", "Filter");
+        filter.putClientProperty("JTextField.placeholderText", I18n.t("xml.filter"));
         filter.putClientProperty("JTextField.showClearButton", Boolean.TRUE);
-        filter.setToolTipText("Shows only values whose path or value contains this text.");
+        filter.setToolTipText(I18n.t("xml.filter.tip"));
         filter.getDocument().addDocumentListener(new DocumentListener() {
             @Override
             public void insertUpdate(DocumentEvent e) {
@@ -121,10 +122,10 @@ class XmlFieldsPanel extends JPanel {
             }
         });
 
-        remove.setToolTipText("Removes the selected values from the invoice.");
+        remove.setToolTipText(I18n.t("xml.remove.tip"));
         remove.addActionListener(e -> removeSelected());
 
-        JLabel hint = new JLabel("Changes here are applied to the invoice directly. Sums are calculated again.");
+        JLabel hint = new JLabel(I18n.t("xml.hint"));
         hint.setForeground(UIManager.getColor("Label.disabledForeground"));
         count.setForeground(UIManager.getColor("Label.disabledForeground"));
 
@@ -183,7 +184,7 @@ class XmlFieldsPanel extends JPanel {
         for (int i = 0; i < visible.size(); ++i)
             if (selected.contains(visible.get(i).path()))
                 table.addRowSelectionInterval(i, i);
-        count.setText(visible.size() == all.size() ? all.size() + " values" : visible.size() + " of " + all.size() + " values");
+        count.setText(visible.size() == all.size() ? I18n.t("xml.count.all", all.size()) : I18n.t("xml.count.some", visible.size(), all.size()));
         updateRemove();
     }
 
@@ -212,7 +213,7 @@ class XmlFieldsPanel extends JPanel {
     }
 
     private class FieldModel extends AbstractTableModel {
-        private final String[] names = {"Path", "Attributes", "Value"};
+        private final String[] names = {I18n.t("xml.col.path"), I18n.t("xml.col.attributes"), I18n.t("xml.col.value")};
 
         @Override
         public int getRowCount() {
@@ -258,7 +259,7 @@ class XmlFieldsPanel extends JPanel {
                 try {
                     f.setAttributes(v);
                 } catch (IllegalArgumentException e) {
-                    JOptionPane.showMessageDialog(XmlFieldsPanel.this, e.getMessage(), "Attributes",
+                    JOptionPane.showMessageDialog(XmlFieldsPanel.this, e.getMessage(), I18n.t("xml.col.attributes"),
                             JOptionPane.WARNING_MESSAGE);
                     return;
                 }

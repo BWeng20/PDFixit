@@ -1,5 +1,6 @@
 package com.bw.jPdfTool;
 
+import com.bw.jPdfTool.I18n;
 import com.bw.jPdfTool.invoice.EInvoice;
 import com.bw.jPdfTool.cli.CommandExecuter;
 import com.bw.jPdfTool.model.MergeOptions;
@@ -27,98 +28,82 @@ import java.util.regex.Pattern;
  * CLI interface. Accepts file names as arguments and opens the UI or executes commands headless.
  */
 @Command(name = "jPdfTool", mixinStandardHelpOptions = true, version = "jPdfTool " + BuildVersion.VERSION,
-        footer = {
-                "",
-                "Permission flags have only effect if owner- or user-password is given.",
-                "If only the user password is given, the owner password will be set to a random value."
-        })
+        resourceBundle = "messages")
 public class Main implements Callable<Integer> {
 
-    @Option(names = {"-out", "--out"}, description = "The path to the output file. Without it (and without other options) the UI is opened with the given files.")
+    @Option(names = {"-out", "--out"}, descriptionKey = "cli.out")
     private String out;
 
-    @Option(names = {"-s", "--split"}, paramLabel = "<pages per file>", description = "Split resulting document. Output filename is extended by an index for each file.")
+    @Option(names = {"-s", "--split"}, paramLabel = "<pages per file>", descriptionKey = "cli.split")
     private int splitToPagesPerFile = 0;
 
-    @Option(names = {"-opw", "--ownerpassword"}, paramLabel = "<password>", description = "Owner password for the output PDF.")
+    @Option(names = {"-opw", "--ownerpassword"}, paramLabel = "<password>", descriptionKey = "cli.ownerpassword")
     private String ownerpassword = "";
 
-    @Option(names = {"-upw", "--userpassword"}, paramLabel = "<password>", description = "User password for the output PDF.")
+    @Option(names = {"-upw", "--userpassword"}, paramLabel = "<password>", descriptionKey = "cli.userpassword")
     private String userpassword = "";
 
-    @Option(names = {"-pw", "--originalpassword", "--orginalpassword"}, paramLabel = "<password>", description = "Password for the input PDF. ('--orginalpassword' is the old, misspelled name, kept for compatibility.)")
+    @Option(names = {"-pw", "--originalpassword", "--orginalpassword"}, paramLabel = "<password>", descriptionKey = "cli.originalpassword")
     private String password2Load;
 
-    @Parameters(paramLabel = "PDF File", description = "File(s) to load.")
+    @Parameters(paramLabel = "PDF File", descriptionKey = "cli.files")
     private List<String> fileArguments;
 
-    @Option(names = {"-cpt", "--canPrint"}, negatable = true, defaultValue = "false", description = "User shall be able to print.")
+    @Option(names = {"-cpt", "--canPrint"}, negatable = true, defaultValue = "false", descriptionKey = "cli.canPrint")
     private boolean canPrint = false;
 
-    @Option(names = {"-cmd", "--canModify"}, negatable = true, defaultValue = "false", description = "User shall be able to modify the document.")
+    @Option(names = {"-cmd", "--canModify"}, negatable = true, defaultValue = "false", descriptionKey = "cli.canModify")
     private boolean canModify = false;
 
-    @Option(names = {"-cec", "--canExtractContent"}, negatable = true, defaultValue = "false", description = "User shall be able to extract content.")
+    @Option(names = {"-cec", "--canExtractContent"}, negatable = true, defaultValue = "false", descriptionKey = "cli.canExtractContent")
     private boolean canExtractContent = false;
 
-    @Option(names = {"-cea", "--canExtractForAccessibility"}, negatable = true, defaultValue = "false", description = "User shall be able to extract content for accessibility.")
+    @Option(names = {"-cea", "--canExtractForAccessibility"}, negatable = true, defaultValue = "false", descriptionKey = "cli.canExtractForAccessibility")
     private boolean canExtractForAccessibility = false;
 
-    @Option(names = {"-cff", "--canFillInForm"}, negatable = true, defaultValue = "false", description = "User shall be able to fill in forms.")
+    @Option(names = {"-cff", "--canFillInForm"}, negatable = true, defaultValue = "false", descriptionKey = "cli.canFillInForm")
     private boolean canFillInForm = false;
 
-    @Option(names = {"-cas", "--canAssemble"}, negatable = true, defaultValue = "false", description = "User shall be able to assemble documents.")
+    @Option(names = {"-cas", "--canAssemble"}, negatable = true, defaultValue = "false", descriptionKey = "cli.canAssemble")
     private boolean canAssemble = false;
 
-    @Option(names = {"-cma", "--canModifyAnnotations"}, negatable = true, defaultValue = "false", description = "User shall be able to modify annotations.")
+    @Option(names = {"-cma", "--canModifyAnnotations"}, negatable = true, defaultValue = "false", descriptionKey = "cli.canModifyAnnotations")
     private boolean canModifyAnnotations = false;
 
-    @Option(names = {"-h", "--help"}, usageHelp = true, description = "Display this help message and exit.")
+    @Option(names = {"-h", "--help"}, usageHelp = true, descriptionKey = "cli.help")
     private boolean helpRequested = false;
 
-    @Option(names = {"-m", "--merge"}, paramLabel = "<start>-<amount>-<skip>", description =
-            "Zipper merge instead of append. '5-2-3' will start before page 5 of the current document, inserts 2 pages of the new document, then skip 3 pages, then inserts again 2 pages, skip again 3 e.t.c. until all new pages are added.")
+    @Option(names = {"-m", "--merge"}, paramLabel = "<start>-<amount>-<skip>", descriptionKey = "cli.merge")
     private String mergeOptions = "";
 
-    @Option(names = {"-cert", "--certificate"}, paramLabel = "<p12 file>", description =
-            "Signs the resulting PDF with a certificate from a p12 file.")
+    @Option(names = {"-cert", "--certificate"}, paramLabel = "<p12 file>", descriptionKey = "cli.certificate")
     private String signCertFile = null;
 
-    @Option(names = {"-cpw", "--certificatePassword"}, paramLabel = "<password for p12 file>", description =
-            "Password for the certificate.")
+    @Option(names = {"-cpw", "--certificatePassword"}, paramLabel = "<password for p12 file>", descriptionKey = "cli.certificatePassword")
     private String signCertPassword = null;
 
-    @Option(names = {"-rt", "--redactText"}, paramLabel = "<regex>", description =
-            "Permanently removes all text matching the regular expression. The affected pages are converted to images.")
+    @Option(names = {"-rt", "--redactText"}, paramLabel = "<regex>", descriptionKey = "cli.redactText")
     private List<String> redactTexts = new ArrayList<>();
 
-    @Option(names = {"-ra", "--redactArea"}, paramLabel = "<page>:<x>,<y>,<width>,<height>", description =
-            "Permanently removes an area. Values in points (1/72 inch) from the upper left corner of the page, e.g. '1:50,100,200,20'. The affected pages are converted to images.")
+    @Option(names = {"-ra", "--redactArea"}, paramLabel = "<page>:<x>,<y>,<width>,<height>", descriptionKey = "cli.redactArea")
     private List<String> redactAreas = new ArrayList<>();
 
-    @Option(names = {"-ai", "--attachInvoice"}, paramLabel = "<xml file>", description =
-            "Attaches an invoice (ZUGFeRD/Factur-X, CII syntax) to the resulting PDF. An existing invoice is replaced. "
-                    + "The result is only valid if the PDF is PDF/A-3 compliant, use '-vi' to check that.")
+    @Option(names = {"-ai", "--attachInvoice"}, paramLabel = "<xml file>", descriptionKey = "cli.attachInvoice")
     private String attachInvoice = null;
 
-    @Option(names = {"-ei", "--extractInvoice"}, paramLabel = "<xml file>", description =
-            "Writes the invoice (ZUGFeRD/Factur-X) of the loaded document to a file.")
+    @Option(names = {"-ei", "--extractInvoice"}, paramLabel = "<xml file>", descriptionKey = "cli.extractInvoice")
     private String extractInvoice = null;
 
-    @Option(names = {"-ri", "--removeInvoice"}, description =
-            "Removes the invoice from the document. Required if you redact a document that contains an invoice.")
+    @Option(names = {"-ri", "--removeInvoice"}, descriptionKey = "cli.removeInvoice")
     private boolean removeInvoice = false;
 
-    @Option(names = {"-vi", "--validateInvoice"}, description =
-            "Validates the resulting PDF and its invoice (PDF/A-3 and EN 16931). Can't be combined with '--split'.")
+    @Option(names = {"-vi", "--validateInvoice"}, descriptionKey = "cli.validateInvoice")
     private boolean validateInvoice = false;
 
-    @Option(names = {"-vp", "--validatePdfa"}, description =
-            "Validates the resulting PDF with veraPDF against the PDF/A flavour it declares (a PDF without declaration is reported as such). "
-                    + "Can't be combined with '--split'.")
+    @Option(names = {"-vp", "--validatePdfa"}, descriptionKey = "cli.validatePdfa")
     private boolean validatePdfa = false;
 
-    @Option(names = {"--debug"}, description = "Shows debug output and stack traces. Also possible with the system property 'jpdftool.debug=true'. Can be used together with file names to start the UI in debug mode.")
+    @Option(names = {"--debug"}, descriptionKey = "cli.debug")
     private boolean debug = false;
 
     @Spec
@@ -142,14 +127,14 @@ public class Main implements Callable<Integer> {
         }
 
         if (attachInvoice != null && !Files.exists(Paths.get(attachInvoice))) {
-            System.err.printf("File '%s' doesn't exists.\n", attachInvoice);
+            System.err.println(I18n.t("cli.fileMissing", attachInvoice));
             return 10;
         }
 
         if (signCertFile != null) {
             signatureFile = Paths.get(signCertFile);
             if (!Files.exists(signatureFile)) {
-                System.err.printf("File '%s' doesn't exists.\n", signatureFile);
+                System.err.println(I18n.t("cli.fileMissing", signatureFile));
                 return 10;
             }
         }
@@ -165,7 +150,7 @@ public class Main implements Callable<Integer> {
             if (Files.exists(p))
                 this.files.add(p);
             else {
-                System.err.printf("File '%s' doesn't exists.\n", f);
+                System.err.println(I18n.t("cli.fileMissing", f));
             }
         }
         return 0;
@@ -188,6 +173,7 @@ public class Main implements Callable<Integer> {
     }
 
     public static void main(String[] args) {
+        I18n.init();
 
         Main main = new Main();
         if (args.length > 0) {
@@ -215,12 +201,12 @@ public class Main implements Callable<Integer> {
     protected int executeCommands() {
 
         if (files.isEmpty()) {
-            System.err.println("No file arguments given.");
+            System.err.println(I18n.t("cli.noFiles"));
             usage(System.err);
             return 2;
         }
         if (outfile == null) {
-            System.err.println("No output file given.");
+            System.err.println(I18n.t("cli.noOutput"));
             usage(System.err);
             return 3;
         }
@@ -230,7 +216,7 @@ public class Main implements Callable<Integer> {
             if (!mergeOptions.isEmpty()) {
                 String[] mergeParams = mergeOptions.split("-");
                 if (mergeParams.length != 3) {
-                    System.err.println("error in '-merge' argument.");
+                    System.err.println(I18n.t("cli.mergeError"));
                     usage(System.err);
                     return 4;
                 }
@@ -240,11 +226,11 @@ public class Main implements Callable<Integer> {
                     mo.segmentLength = Integer.parseInt(mergeParams[1]);
                     mo.gapLength = Integer.parseInt(mergeParams[2]);
                 } catch (NumberFormatException ne) {
-                    System.err.println("illegal number in '-merge' argument.");
+                    System.err.println(I18n.t("cli.mergeNumber"));
                     usage(System.err);
                     return 5;
                 }
-                System.out.println("Merging " + mo);
+                System.out.println(I18n.t("cli.merging", mo));
             }
 
             List<Pattern> textPatterns = new ArrayList<>();
@@ -255,13 +241,13 @@ public class Main implements Callable<Integer> {
                 for (String a : redactAreas)
                     areas.add(parseRedactArea(a));
             } catch (IllegalArgumentException e) {
-                System.err.println("error in redact argument: " + e.getMessage());
+                System.err.println(I18n.t("cli.redactError", e.getMessage()));
                 usage(System.err);
                 return 6;
             }
 
             if ((validateInvoice || validatePdfa) && splitToPagesPerFile > 0) {
-                System.err.println("'--validateInvoice' and '--validatePdfa' can't be combined with '--split'.");
+                System.err.println(I18n.t("cli.validateSplit"));
                 usage(System.err);
                 return 7;
             }
@@ -278,28 +264,27 @@ public class Main implements Callable<Integer> {
 
             if (extractInvoice != null) {
                 if (executer.extractInvoice(Paths.get(extractInvoice)))
-                    System.out.println("Stored invoice to '" + extractInvoice + "'");
+                    System.out.println(I18n.t("cli.invoiceStored", extractInvoice));
                 else {
-                    System.err.println("The document contains no invoice.");
+                    System.err.println(I18n.t("cli.noInvoiceErr"));
                     return 8;
                 }
             }
 
             if (hasInvoice && !removeInvoice && (!textPatterns.isEmpty() || !areas.isEmpty())) {
-                System.err.println("The document contains an invoice. Redaction doesn't touch its data, "
-                        + "so confidential data may remain in the invoice. Use '--removeInvoice' to drop it.");
+                System.err.println(I18n.t("cli.redactInvoice"));
                 return 9;
             }
 
             if (!textPatterns.isEmpty() || !areas.isEmpty()) {
-                System.out.println("Redacted " + executer.redact(textPatterns, areas) + " areas");
+                System.out.println(I18n.t("cli.redacted", executer.redact(textPatterns, areas)));
             }
 
             if (removeInvoice) {
                 if (executer.removeInvoice())
-                    System.out.println("Removed invoice");
+                    System.out.println(I18n.t("cli.invoiceRemoved"));
                 else
-                    System.out.println("The document contains no invoice");
+                    System.out.println(I18n.t("cli.noInvoiceOut"));
             }
 
             if (attachInvoice != null) {
@@ -309,7 +294,7 @@ public class Main implements Callable<Integer> {
                     System.err.println(e.getMessage());
                     return 13;
                 }
-                System.out.println("Attached invoice '" + attachInvoice + "'");
+                System.out.println(I18n.t("cli.invoiceAttached", attachInvoice));
             }
 
             AccessPermission ap = new AccessPermission();
@@ -326,7 +311,7 @@ public class Main implements Callable<Integer> {
 
             if (ownerpassword.isEmpty() && !userpassword.isEmpty()) {
                 ownerpassword = UUID.randomUUID().toString();
-                System.out.println("Generated owner password: " + ownerpassword);
+                System.out.println(I18n.t("cli.ownerGenerated", ownerpassword));
             }
 
             if (this.splitToPagesPerFile > 0) {
@@ -344,15 +329,15 @@ public class Main implements Callable<Integer> {
                 try {
                     v = executer.validateInvoice(outfile);
                 } catch (Exception e) {
-                    System.err.println("Validation failed: " + e.getMessage());
+                    System.err.println(I18n.t("cli.validationFailed", e.getMessage()));
                     return 11;
                 }
                 v.messages().forEach(System.err::println);
                 if (!v.valid()) {
-                    System.err.println("The resulting document is no valid invoice.");
+                    System.err.println(I18n.t("cli.invoiceInvalid"));
                     return 12;
                 }
-                System.out.println("The resulting document is a valid invoice.");
+                System.out.println(I18n.t("cli.invoiceValid"));
             }
 
             if (validatePdfa) {
@@ -360,15 +345,15 @@ public class Main implements Callable<Integer> {
                 try {
                     result = executer.validatePdfa(outfile);
                 } catch (Exception e) {
-                    System.err.println("Validation failed: " + e.getMessage());
+                    System.err.println(I18n.t("cli.validationFailed", e.getMessage()));
                     return 11;
                 }
                 result.toLines().forEach(System.err::println);
                 if (!result.isConform()) {
-                    System.err.println("The resulting document is not PDF/A conform.");
+                    System.err.println(I18n.t("cli.pdfaInvalid"));
                     return 15;
                 }
-                System.out.println("The resulting document is PDF/A conform.");
+                System.out.println(I18n.t("cli.pdfaValid"));
             }
 
 
@@ -390,13 +375,28 @@ public class Main implements Callable<Integer> {
         String[] pageAndArea = arg.split(":");
         String[] v = pageAndArea.length == 2 ? pageAndArea[1].split(",") : new String[0];
         if (v.length != 4)
-            throw new IllegalArgumentException("'" + arg + "' doesn't match <page>:<x>,<y>,<width>,<height>");
+            throw new IllegalArgumentException(I18n.t("cli.areaMismatch", arg));
         int page = Integer.parseInt(pageAndArea[0].trim());
         double x = Double.parseDouble(v[0].trim());
         double y = Double.parseDouble(v[1].trim());
         double w = Double.parseDouble(v[2].trim());
         double h = Double.parseDouble(v[3].trim());
         return new Redactor.Region(page, new Rectangle2D.Double(x, y, w, h));
+    }
+
+    /**
+     * Creates the user interface anew in this process, e.g. after the language was changed: the language is read
+     * again and the document of the closed user interface is carried over.
+     *
+     * @param carry The document, may be null.
+     */
+    public static void restartUI(UI.Carry carry) {
+
+        I18n.init();
+        UI.resetLocalizedState();
+        UI.createUI(List.of(), carry);
+        // Run later, force pending disposals of the old UI.
+        javax.swing.SwingUtilities.invokeLater(System::gc);
     }
 
     protected void createUI() {

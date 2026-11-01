@@ -11,24 +11,24 @@ import java.util.Optional;
  * conversion is not complete yet.
  */
 public enum PdfStandardProfile {
-    PDFA_1A(Family.PDFA, 1, "A", "PDF/A-1a", false, "Based on PDF 1.4. Accessible: needs a tagged document structure, which can't be created."),
-    PDFA_1B(Family.PDFA, 1, "B", "PDF/A-1b", false, "Based on PDF 1.4. No transparency, no encryption, no embedded files, no xref streams."),
-    PDFA_2A(Family.PDFA, 2, "A", "PDF/A-2a", false, "Based on PDF 1.7. Accessible: needs a tagged document structure, which can't be created."),
-    PDFA_2B(Family.PDFA, 2, "B", "PDF/A-2b", false, "Based on PDF 1.7. Transparency allowed, no encryption, no embedded files."),
-    PDFA_2U(Family.PDFA, 2, "U", "PDF/A-2u", false, "Like PDF/A-2b, and all text must map to Unicode."),
-    PDFA_3A(Family.PDFA, 3, "A", "PDF/A-3a", true, "Like PDF/A-3b. Accessible: needs a tagged document structure, which can't be created."),
-    PDFA_3B(Family.PDFA, 3, "B", "PDF/A-3b", true, "Based on PDF 1.7. Like PDF/A-2, but any file may be embedded (e-invoices)."),
-    PDFA_3U(Family.PDFA, 3, "U", "PDF/A-3u", true, "Like PDF/A-3b, and all text must map to Unicode."),
-    PDFA_4(Family.PDFA, 4, null, "PDF/A-4", false, "Based on PDF 2.0. Declared without conformance level."),
-    PDFA_4E(Family.PDFA, 4, "E", "PDF/A-4e", false, "PDF/A-4 for engineering (3D, RichMedia)."),
-    PDFA_4F(Family.PDFA, 4, "F", "PDF/A-4f", true, "PDF/A-4 that may embed any file."),
+    PDFA_1A(Family.PDFA, 1, "A", "PDF/A-1a", false, "standard.desc.PDFA_1A"),
+    PDFA_1B(Family.PDFA, 1, "B", "PDF/A-1b", false, "standard.desc.PDFA_1B"),
+    PDFA_2A(Family.PDFA, 2, "A", "PDF/A-2a", false, "standard.desc.PDFA_2A"),
+    PDFA_2B(Family.PDFA, 2, "B", "PDF/A-2b", false, "standard.desc.PDFA_2B"),
+    PDFA_2U(Family.PDFA, 2, "U", "PDF/A-2u", false, "standard.desc.PDFA_2U"),
+    PDFA_3A(Family.PDFA, 3, "A", "PDF/A-3a", true, "standard.desc.PDFA_3A"),
+    PDFA_3B(Family.PDFA, 3, "B", "PDF/A-3b", true, "standard.desc.PDFA_3B"),
+    PDFA_3U(Family.PDFA, 3, "U", "PDF/A-3u", true, "standard.desc.PDFA_3U"),
+    PDFA_4(Family.PDFA, 4, null, "PDF/A-4", false, "standard.desc.PDFA_4"),
+    PDFA_4E(Family.PDFA, 4, "E", "PDF/A-4e", false, "standard.desc.PDFA_4E"),
+    PDFA_4F(Family.PDFA, 4, "F", "PDF/A-4f", true, "standard.desc.PDFA_4F"),
 
-    PDFX_1A(Family.PDFX, 1, null, "PDF/X-1a", false, "Print: CMYK and spot colors only, all fonts embedded, trapping declared."),
-    PDFX_3(Family.PDFX, 3, null, "PDF/X-3", false, "Print: like PDF/X-1a, colors may be color managed."),
-    PDFX_4(Family.PDFX, 4, null, "PDF/X-4", false, "Print: transparency and layers allowed."),
-    PDFUA_1(Family.PDFUA, 1, null, "PDF/UA-1", false, "Universal accessibility: needs a tagged document structure, which can't be created."),
-    PDFE_1(Family.PDFE, 1, null, "PDF/E-1", false, "Engineering documents."),
-    PDFVT_1(Family.PDFVT, 1, null, "PDF/VT-1", false, "Variable data printing.");
+    PDFX_1A(Family.PDFX, 1, null, "PDF/X-1a", false, "standard.desc.PDFX_1A"),
+    PDFX_3(Family.PDFX, 3, null, "PDF/X-3", false, "standard.desc.PDFX_3"),
+    PDFX_4(Family.PDFX, 4, null, "PDF/X-4", false, "standard.desc.PDFX_4"),
+    PDFUA_1(Family.PDFUA, 1, null, "PDF/UA-1", false, "standard.desc.PDFUA_1"),
+    PDFE_1(Family.PDFE, 1, null, "PDF/E-1", false, "standard.desc.PDFE_1"),
+    PDFVT_1(Family.PDFVT, 1, null, "PDF/VT-1", false, "standard.desc.PDFVT_1");
 
     /**
      * The family of standards.
@@ -81,7 +81,7 @@ public enum PdfStandardProfile {
     }
 
     public String description() {
-        return description;
+        return I18n.t(description);
     }
 
     /**
@@ -98,8 +98,8 @@ public enum PdfStandardProfile {
     public String notVerifiableReason() {
         return switch (family) {
             case PDFA -> null;
-            case PDFUA -> "The result is not verified: this tool doesn't check PDF/UA.";
-            default -> "The result can't be verified by veraPDF, it doesn't know " + label.substring(0, label.indexOf('-')) + ".";
+            case PDFUA -> I18n.t("standard.notVerified.ua");
+            default -> I18n.t("standard.notVerified.other", label.substring(0, label.indexOf('-')));
         };
     }
 

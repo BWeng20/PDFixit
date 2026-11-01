@@ -100,6 +100,20 @@ public class Toaster {
         repositionPanels();
     }
 
+    /**
+     * Removes all toasts and stops their timers, e.g. before the owning window is disposed.
+     */
+    public void clear() {
+        if (layeredPane == null)
+            return;
+        for (Toast t : bread) {
+            layeredPane.remove(t);
+            t.cleanUp();
+        }
+        bread.clear();
+        layeredPane.repaint();
+    }
+
     private void removeNotification(Toast toast) {
         layeredPane.remove(toast);
         bread.remove(toast);

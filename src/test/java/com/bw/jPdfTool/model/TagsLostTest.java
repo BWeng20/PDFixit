@@ -34,11 +34,11 @@ public class TagsLostTest {
         DocumentProxy proxy = proxy(true, reports);
         try {
             proxy.renderAllPagesToImage();
-            Assertions.assertEquals(List.of("To Image: " + PdfRisk.TAGS_LOST), reports);
+            Assertions.assertEquals(List.of("To Image: " + PdfRisk.tagsLostWarning()), reports);
             reports.clear();
             proxy.renderPageToImage(1);
             // The page is an image now: the document has a structure tree, but its page was converted again.
-            Assertions.assertEquals(List.of("To Image: " + PdfRisk.TAGS_LOST), reports);
+            Assertions.assertEquals(List.of("To Image: " + PdfRisk.tagsLostWarning()), reports);
         } finally {
             proxy.close();
         }
@@ -65,7 +65,7 @@ public class TagsLostTest {
             proxy.redact(List.of());
             Assertions.assertEquals(List.of(), reports, "nothing redacted");
             proxy.redact(List.of(new Redactor.Region(1, new Rectangle2D.Double(10, 10, 50, 20))));
-            Assertions.assertEquals(List.of("Redaction: " + PdfRisk.TAGS_LOST), reports);
+            Assertions.assertEquals(List.of("Redaction: " + PdfRisk.tagsLostWarning()), reports);
         } finally {
             proxy.close();
         }
