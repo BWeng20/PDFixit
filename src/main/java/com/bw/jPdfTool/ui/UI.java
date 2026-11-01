@@ -222,6 +222,8 @@ public class UI extends JSplitPane {
                         if (append && documentProxy != null) {
                             appendPdf(file, new MergeOptions());
                         } else {
+                            if (!confirmDiscard("Load"))
+                                break;
                             selectPdf(file);
                             append = true;
                         }
@@ -1188,7 +1190,7 @@ public class UI extends JSplitPane {
         if (result == JFileChooser.APPROVE_OPTION) {
             File[] selectedFiles = chooser.getSelectedFiles();
             MergeOptions mo = new MergeOptions();
-            if (selectedFiles.length > 0) {
+            if (selectedFiles.length > 0 && confirmDiscard("Load")) {
                 selectPdf(selectedFiles[0]);
                 for (int i = 1; i < selectedFiles.length; ++i)
                     appendPdf(selectedFiles[i], mo);
@@ -1524,11 +1526,22 @@ public class UI extends JSplitPane {
      * @return True if the program may exit.
      */
     protected boolean confirmExit() {
+        return confirmDiscard("Exit");
+    }
+
+    /**
+     * Asks to save if the option is set and the document has unsaved changes, before they are lost
+     * by exiting or by loading another document.
+     *
+     * @param title The title of the question dialog.
+     * @return True if the changes may be discarded.
+     */
+    protected boolean confirmDiscard(String title) {
         if (documentProxy == null || !documentProxy.isModified()
                 || !Preferences.getInstance().getBoolean(Preferences.USER_PREF_CONFIRM_EXIT, true))
             return true;
         Object[] options = {"Write…", "Don't Write", "Cancel"};
-        int choice = JOptionPane.showOptionDialog(this, "The document has changes that are not written to a file.", "Exit",
+        int choice = JOptionPane.showOptionDialog(this, "The document has changes that are not written to a file.", title,
                 JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE, null, options, options[0]);
         if (choice == 0) {
             doSave();
@@ -2562,6 +2575,19 @@ public class UI extends JSplitPane {
                         System.exit(0);
                 }
             });
+
+            // System quit (e.g. Cmd+Q on macOS, Dock menu) bypasses windowClosing.
+            try {
+                if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.APP_QUIT_HANDLER))
+                    Desktop.getDesktop().setQuitHandler((e, response) -> {
+                        if (ui.confirmExit())
+                            response.performQuit();
+                        else
+                            response.cancelQuit();
+                    });
+            } catch (Exception ex) {
+                Log.error("Cannot install quit handler: %s", ex.getMessage());
+            }
 
             UI.mainWindow.setJMenuBar(ui.getMenu());
             UI.mainWindow.setLocationByPlatform(true);
