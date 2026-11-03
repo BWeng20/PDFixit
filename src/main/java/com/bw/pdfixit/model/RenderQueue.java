@@ -87,9 +87,14 @@ public class RenderQueue {
 
                         // Check in loop for cases where the document was manipulated meanwhile.
                         while (proxy.needsRendering()) {
+                            if (proxy.getDocument() != document) {
+                                // The document was replaced (e.g. by a repair): start again with the new one.
+                                documentQueue.offer(proxy);
+                                break;
+                            }
                             int pdPageCount = document.getNumberOfPages();
                             for (int i = 0; i < proxy.getPageCount(); i++) {
-                                if (proxy.isClosed())
+                                if (proxy.isClosed() || proxy.getDocument() != document)
                                     break;
                                 Page page = proxy.getPage(i + 1);
                                 if (page != null && page.image == null && page.error == null) {
@@ -110,6 +115,12 @@ public class RenderQueue {
                                             page.dpi = dpi;
                                             page.error = null;
                                         } catch (Exception e) {
+                                            if (proxy.getDocument() != document) {
+                                                // The old document was closed meanwhile: not an error of the page.
+                                                page.image = null;
+                                                page.error = null;
+                                                continue;
+                                            }
                                             page.error = e.getMessage();
                                         }
                                     } else {

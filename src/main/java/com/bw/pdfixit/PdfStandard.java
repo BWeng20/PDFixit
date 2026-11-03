@@ -198,6 +198,204 @@ public final class PdfStandard {
     }
 
     /**
+     * The result of {@link #repairPdfa}.
+     *
+     * @param pdf            The repaired PDF, null if nothing was changed.
+     * @param changes        What was changed and how often, empty if nothing.
+     * @param upgradeOffered True if the document declares PDF/A-1 or PDF/A-2 and has attachments, which these standards
+     *                       forbid. The repair did not change the standard; with the option {@code upgradeToPdfa3} it would
+     *                       declare PDF/A-3 to keep the attachments.
+     */
+    public record Repair(byte[] pdf, Map<String, Integer> changes, boolean upgradeOffered) {
+    }
+
+    /**
+     * Checks if the document declares PDF/A-1 or PDF/A-2 and has attachments. Only PDF/A-3 allows them, so a repair
+     * could switch the standard to keep them (see {@link #repairPdfa(byte[], boolean)}).
+     */
+    public static boolean hasAttachmentsBeforePdfa3(PDDocument document) {
+        int part = pdfaPart(document);
+        if (part != 1 && part != 2)
+            return false;
+        var names = document.getDocumentCatalog().getNames();
+        return names != null && names.getEmbeddedFiles() != null;
+    }
+
+    private static final String BROKEN_SCHEMA_RULE = ".* (6[.]7[.][89]|6[.]6[.]2[.]3[.][0-9])-[0-9]+";
+    private static final String DIFFERING_INFO_RULE = ".* (6[.]7[.]3|6[.]6[.]2[.]3[.]1)-[0-9]+";
+
+    /**
+     * The one PDF/A repair, used when a loaded document is repaired, for its preview, and when an invoice is
+     * attached. It repairs what veraPDF reports and can be repaired without losing data:
+     * <ul>
+     * <li>{@link #fixPdfaIssues}: content, output intent, declaration, fonts</li>
+     * <li>a document that declares level a without a structure gets the formal one of {@link PdfTagger}</li>
+     * <li>embedded files in PDF/A-1 and -2: only with the option {@code upgradeToPdfa3} the document is declared
+     * PDF/A-3 and the files become associated files; without it the standard is not changed</li>
+     * <li>an invalid XMP extension schema is removed</li>
+     * <li>the document information and the XMP metadata are made equal (only if they differ)</li>
+     * <li>finally the metadata fixer of veraPDF</li>
+     * </ul>
+     * The input is not changed, so a failure leaves nothing half repaired.
+     *
+     * @param pdf The complete PDF.
+     * @throws FontEmbedException If a font can't be embedded.
+     */
+    public static Repair repairPdfa(byte[] pdf) throws IOException {
+        return repairPdfa(pdf, false);
+    }
+
+    /**
+     * Like {@link #repairPdfa(byte[])}, and can switch the standard.
+     *
+     * @param upgradeToPdfa3 True to declare PDF/A-3 for a PDF/A-1 or PDF/A-2 document with attachments. That changes the
+     *                       standard of the document, so the caller asks the user first. False keeps the standard, the result then
+     *                       tells in {@link Repair#upgradeOffered()} that the switch would be possible.
+     */
+    public static Repair repairPdfa(byte[] pdf, boolean upgradeToPdfa3) throws IOException {
+        boolean upgradeOffered = false;
+        Map<String, Integer> changes;
+        byte[] result = pdf;
+        boolean pdfa;
+        boolean brokenSchema = false;
+        boolean differingInfo = false;
+        try (PDDocument probe = Loader.loadPDF(pdf)) {
+            if (pdfaPart(probe) > 0) {
+                var v = PdfaValidator.validate(pdf);
+                boolean notConform = v.getState() == ValidationResult.State.NOT_CONFORM;
+                brokenSchema = notConform && v.getFindings().stream()
+                        .anyMatch(f -> f.rule().matches(BROKEN_SCHEMA_RULE));
+                differingInfo = notConform && v.getFindings().stream()
+                        .anyMatch(f -> f.rule().matches(DIFFERING_INFO_RULE));
+            }
+        }
+        try (PDDocument document = Loader.loadPDF(pdf)) {
+            changes = fixPdfaIssues(document);
+            if (needsFormalTags(document, profile(document)))
+                // The document declares level a: add the formal structure, see PdfTagger.
+                changes.put(I18n.t("fix.formalTags"), PdfTagger.tagPages(document));
+            int part = pdfaPart(document);
+            if (hasAttachmentsBeforePdfa3(document)) {
+                if (upgradeToPdfa3) {
+                    // Embedded files are forbidden before PDF/A-3: declare PDF/A-3 instead of removing them.
+                    changes.putAll(convertTo(document, PdfStandardProfile.PDFA_3B));
+                    part = 3;
+                } else {
+                    upgradeOffered = true;
+                }
+            }
+            if (part == 3) {
+                int associated = associateEmbeddedFiles(document);
+                if (associated > 0)
+                    changes.put(I18n.t("fix.associatedFiles"), associated);
+            }
+            if (part >= 1 && part <= 3) {
+                if (brokenSchema) {
+                    String xmp = xmp(document);
+                    String stripped = xmp.replaceAll("(?s)<pdfaExtension:schemas>.*?</pdfaExtension:schemas>", "");
+                    if (!stripped.equals(xmp)) {
+                        writeXmp(document, stripped);
+                        changes.put(I18n.t("fix.extensionSchema"), 1);
+                    }
+                }
+                // The document information and the metadata must be equal.
+                if (differingInfo && DocumentInformation.copy(document, document))
+                    changes.put(I18n.t("fix.syncInfo"), 1);
+            }
+            pdfa = part > 0;
+            if (!changes.isEmpty()) {
+                var out = new java.io.ByteArrayOutputStream(pdf.length + 1024);
+                // PDF/A-1 forbids xref and object streams.
+                if (part == 1)
+                    document.save(out, org.apache.pdfbox.pdfwriter.compress.CompressParameters.NO_COMPRESSION);
+                else
+                    document.save(out);
+                result = out.toByteArray();
+            }
+        }
+        if (pdfa) {
+            PdfaValidator.MetadataFix fix = PdfaValidator.fixMetadata(result);
+            Log.info("veraPDF metadata fixer: %s %s", fix.status(), fix.fixes());
+            if (fix.pdf() != null) {
+                result = fix.pdf();
+                fix.fixes().forEach(f -> changes.merge("veraPDF: " + f, 1, Integer::sum));
+                if (fix.fixes().isEmpty())
+                    changes.merge(I18n.t("ui.fixer.fixed"), 1, Integer::sum);
+            }
+        }
+        return new Repair(changes.isEmpty() ? null : result, changes, upgradeOffered);
+    }
+
+    /**
+     * PDF/A-3 demands that each embedded file is an associated file: listed in /AF of the catalog and with an
+     * /AFRelationship. Files without a relationship get "Unspecified".
+     *
+     * @return The number of files that were changed.
+     */
+    private static int associateEmbeddedFiles(PDDocument document) throws IOException {
+        var names = document.getDocumentCatalog().getNames();
+        if (names == null || names.getEmbeddedFiles() == null)
+            return 0;
+        var tree = names.getEmbeddedFiles();
+        Map<String, org.apache.pdfbox.pdmodel.common.filespecification.PDComplexFileSpecification> files =
+                new LinkedHashMap<>();
+        collectFiles(tree, files, 0);
+        var catalog = document.getDocumentCatalog().getCOSObject();
+        COSArray af = catalog.getCOSArray(COSName.getPDFName("AF"));
+        if (af == null)
+            af = new COSArray();
+        int changed = 0;
+        for (var spec : files.values()) {
+            COSDictionary dict = spec.getCOSObject();
+            boolean fixed = false;
+            if (dict.getNameAsString("AFRelationship") == null) {
+                dict.setName("AFRelationship", "Unspecified");
+                fixed = true;
+            }
+            // PDF/A-3 demands the keys F and UF and the MIME type of the embedded file.
+            String name = dict.getString(COSName.F);
+            if (dict.getString(COSName.UF) == null && name != null) {
+                dict.setString(COSName.UF, name);
+                fixed = true;
+            }
+            if (dict.getDictionaryObject(COSName.EF) instanceof COSDictionary ef
+                    && ef.getDictionaryObject(COSName.F) instanceof org.apache.pdfbox.cos.COSStream stream
+                    && stream.getNameAsString(COSName.SUBTYPE) == null) {
+                stream.setName(COSName.SUBTYPE, "application/octet-stream");
+                fixed = true;
+            }
+            boolean listed = false;
+            for (int i = 0; i < af.size(); ++i)
+                if (af.getObject(i) == dict)
+                    listed = true;
+            if (!listed) {
+                af.add(dict);
+                fixed = true;
+            }
+            if (fixed)
+                ++changed;
+        }
+        if (changed > 0)
+            catalog.setItem(COSName.getPDFName("AF"), af);
+        return changed;
+    }
+
+    private static void collectFiles(org.apache.pdfbox.pdmodel.common.PDNameTreeNode<
+            org.apache.pdfbox.pdmodel.common.filespecification.PDComplexFileSpecification> node,
+                                     Map<String, org.apache.pdfbox.pdmodel.common.filespecification.PDComplexFileSpecification> out,
+                                     int depth) throws IOException {
+        if (node == null || depth > 20)
+            return;
+        var names = node.getNames();
+        if (names != null)
+            out.putAll(names);
+        var kids = node.getKids();
+        if (kids != null)
+            for (var kid : kids)
+                collectFiles(kid, out, depth + 1);
+    }
+
+    /**
      * Gets the standard the document declares in its metadata. If it declares several, the PDF/A level wins.
      *
      * @return The standard, null if the document declares none or one this tool has no profile for.
@@ -321,11 +519,21 @@ public final class PdfStandard {
             DocumentInformation.removeInfo(document);
             changes.put(I18n.t("fix.movedInfo"), 1);
         }
-        if (addSrgbOutputIntent(document))
-            changes.put(I18n.t("fix.srgb"), 1);
-        changes.putAll(PdfaFixer.fix(document));
-        changes.forEach((what, times) -> Log.info("PDF/A: %s (%d)", what, times));
+        if (needsFormalTags(document, target)) {
+            // Level a: a formal structure, see PdfTagger. A document with tags is not touched.
+            changes.put(I18n.t("fix.formalTags"), PdfTagger.tagPages(document));
+        }
+        // The same fixes as the repair of a loaded document.
+        changes.putAll(fixPdfaIssues(document));
         return changes;
+    }
+
+    /**
+     * Checks if the target is a PDF/A level a and the document has no structure, so that the formal structure of
+     * {@link PdfTagger} is added.
+     */
+    public static boolean needsFormalTags(PDDocument document, PdfStandardProfile target) {
+        return target != null && target.isPdfa() && "A".equals(target.conformance()) && !PdfTagger.isTagged(document);
     }
 
     private static final String XMP_EMPTY = "<?xpacket begin=\"?\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>"
@@ -560,8 +768,8 @@ public final class PdfStandard {
         }
         if (target.isPdfa() && document.isEncrypted())
             lost.add(I18n.t("impact.passwordRemoved"));
-        boolean tagged = document.getDocumentCatalog().getStructureTreeRoot() != null;
-        if (target.isPdfa() && "A".equals(target.conformance()) && !tagged)
+        boolean tagged = PdfTagger.isTagged(document);
+        if (needsFormalTags(document, target))
             notRepaired.add(I18n.t("impact.levelA"));
         if (target.family() == PdfStandardProfile.Family.PDFUA && !tagged)
             notRepaired.add(I18n.t("impact.ua"));
@@ -571,8 +779,8 @@ public final class PdfStandard {
             info.add(I18n.t("impact.levelU"));
         if (target.isPdfa() && target.part() == 1 && usesTransparency(document))
             notRepaired.add(I18n.t("impact.transparency"));
-        if (target.isPdfa() && target.part() == 1)
-            info.add(I18n.t("impact.compression"));
+        if (!target.allowsCompression())
+            info.add(I18n.t("impact.compression", target));
         if (target.family() == PdfStandardProfile.Family.PDFX)
             info.add(I18n.t(target == PdfStandardProfile.PDFX_1A ? "impact.print.1a" : "impact.print"));
         if (target.family() == PdfStandardProfile.Family.PDFE || target.family() == PdfStandardProfile.Family.PDFVT)

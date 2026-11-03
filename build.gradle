@@ -7,7 +7,7 @@ plugins {
 }
 
 group = 'io.github.bweng20'
-version = '3.0'
+version = '3.1'
 
 
 repositories {
@@ -205,6 +205,8 @@ test {
     useJUnitPlatform()
     // The tests check English texts, whatever the language of the machine is.
     systemProperty 'pdfixit.lang', 'en'
+    // veraPDF checks many files in VerifiableRulesRepairTest.
+    maxHeapSize = '2g'
 }
 
 javadoc.options.addStringOption('Xdoclint:none', '-quiet')

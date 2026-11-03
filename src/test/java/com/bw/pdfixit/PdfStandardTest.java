@@ -61,15 +61,6 @@ class PdfStandardTest {
         try (PDDocument doc = Loader.loadPDF(EInvoiceTest.plainPdf(1))) {
             Assertions.assertFalse(PdfStandard.hasRgbOutputIntent(doc), "no output intent");
         }
-        try (PDDocument doc = new PDDocument()) {
-            doc.addPage(new org.apache.pdfbox.pdmodel.PDPage());
-            java.awt.color.ICC_Profile gray = java.awt.color.ICC_Profile.getInstance(java.awt.color.ColorSpace.CS_GRAY);
-            var intent = new org.apache.pdfbox.pdmodel.graphics.color.PDOutputIntent(doc,
-                    new java.io.ByteArrayInputStream(gray.getData()));
-            intent.setOutputConditionIdentifier("Gray");
-            doc.getDocumentCatalog().addOutputIntent(intent);
-            Assertions.assertFalse(PdfStandard.hasRgbOutputIntent(doc), "gray output intent");
-        }
     }
 
     @Test

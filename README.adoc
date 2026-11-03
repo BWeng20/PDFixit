@@ -97,19 +97,21 @@ Many offices and authorities require PDFs that stay readable for many years (arc
 
 * *Changing the standard:* The button *PDF Standard...* opens a dialog with the available standards. For each one it shows in plain words what will be changed and, marked with a warning icon, what will be lost or can't be fixed. Nothing is changed before you confirm.
 * *Not every document can be converted.* The program repairs what can be repaired automatically, but some documents can't be brought to a standard. The check result tells what is missing.
-* *Keeping the standard:* A document that follows a standard is protected from changes that would break it. Functions like passwords, splitting or adding documents that don't follow the standard are disabled then. If a loaded document has problems that a repair can fix, the program asks before it changes anything.
+* *Keeping the standard:* A document that follows a standard is protected from changes that would break it. Functions like passwords, splitting or adding documents that don't follow the standard are disabled then. If a loaded document has problems that a repair can fix, a dialog lists them and what a repair would change; nothing is changed unless you click *Repair*.
+* *Repair:* The same repair is used everywhere: in the dialog when a document is loaded, in the result of *Validate PDF/A* and in the result after changing the standard (there only if problems remain; the button disappears when none are left). The dialog can be closed and the repair started later from *Validate PDF/A*. The repair fixes content that the standard forbids, adds the sRGB output intent, embeds missing fonts, makes the document information and the XMP metadata equal, removes an invalid XMP extension schema and runs the metadata fixer of veraPDF. A document that declares level a gets the formal structure of <<tagging,Level a>>. The repair never changes the standard on its own: for a PDF/A-1 or PDF/A-2 document with attachments, which only PDF/A-3 allows, the program asks whether to switch it to PDF/A-3b to keep them.
+* [[tagging]]*Level a (tagged):* The level a demands a logical structure, which only the program that created the document can describe correctly. If a document has none, the program adds a *formal* structure: one section per page, named by the template `tag.page` ("Page 1", "Page 2", ... or "Seite 1", ... in the language of the program), with the page content as one paragraph. That satisfies the standard, but a screen reader gets no headings, lists, tables or image descriptions. A document that has a structure is never changed. The structure is also added by the repair of a document that declares level a, or by selecting the same level again in *PDF Standard...*.
 * *Invoices:* Attaching an invoice needs PDF/A-3. If the document has another standard, the program asks whether it may switch it.
-* *Compression:* PDF/A-1 forbids compression. The program switches the option *Compression* off then and tells you.
+* *Compression:* PDF/A-1, PDF/X-1a and PDF/X-3 forbid compression. For these standards the option *Compression* is switched off and can't be selected, the program tells you.
 * *Removing the standard:* If you set "**none**" the document is an ordinary PDF afterwards. An e-invoice is no valid e-invoice anymore.
 
 === Fonts
 The menu *Fonts* lists the fonts of the document.
 
 * *Replace:* A selected font can be replaced by one of the bundled fonts, the best match is proposed. The text keeps its characters, but uses the new font.
-* *Missing fonts:* Fonts that are not embedded in the document are embedded when a PDF standard requires it. A similar bundled font is used (e.g. Arimo for Arial). Fonts without a metric compatible substitute (e.g. Calibri) look slightly different afterwards. Symbol fonts (Symbol, Wingdings, ...), unusual fonts and characters the substitute doesn't have (e.g. Chinese) can't be replaced; the program reports them and leaves the document unchanged.
+* *Missing fonts:* Fonts that are not embedded in the document are embedded when a PDF standard requires it. A similar bundled font is used (e.g. Arimo for Arial). Fonts without a metric compatible substitute (e.g. Calibri) look slightly different afterwards. The font Symbol is replaced by Symbol Neu Euro. Other symbol fonts (Wingdings, ZapfDingbats, ...), unusual fonts and characters the substitute doesn't have (e.g. Chinese) can't be replaced; the program reports them and leaves the document unchanged.
 * *Own fonts:* *Fonts > Manage Fonts...* imports TrueType font files (`.ttf`), which can then be used like the bundled ones. Fonts with PostScript outlines (OpenType/CFF), font collections (`.ttc`) and fonts that forbid embedding can't be used. A font that lacks characters of the text is refused with a list of the missing characters.
 * *Merge Duplicates:* Fonts that exist more than once in the document, e.g. one copy per page, are merged to make the file smaller. Fonts that differ in a way that would change the text are not merged.
-* The bundled fonts Arimo, Tinos and Cousine are licensed under the Apache License 2.0.
+* The bundled fonts Arimo, Tinos, Cousine and Symbol Neu Euro are licensed under the Apache License 2.0.
 
 === Remember Passwords
 
@@ -400,7 +402,7 @@ A PDF standard is an agreement about what a PDF may contain, so that it behaves 
 
 |PDF/A-1a
 |Archiving
-|Like 1b, plus a structure for screen readers. The program can't create that structure; the check tells what is missing.
+|Like 1b, plus a structure for screen readers. The program adds only a formal structure, see <<tagging,Level a>>.
 
 |PDF/A-2b
 |Archiving
@@ -412,7 +414,7 @@ A PDF standard is an agreement about what a PDF may contain, so that it behaves 
 
 |PDF/A-2a
 |Archiving
-|Like 2u, plus a structure for screen readers (can't be created by the program).
+|Like 2u, plus a structure for screen readers (the program adds only a formal one, see <<tagging,Level a>>).
 
 |PDF/A-3b
 |Archiving, e-invoices
@@ -420,7 +422,7 @@ A PDF standard is an agreement about what a PDF may contain, so that it behaves 
 
 |PDF/A-3u, PDF/A-3a
 |Archiving, e-invoices
-|Like 3b, plus reliable text copying (u), or plus a structure for screen readers (a).
+|Like 3b, plus reliable text copying (u), or plus a structure for screen readers (a, the program adds only a formal one, see <<tagging,Level a>>).
 
 |PDF/A-4
 |Archiving (newest)
@@ -504,9 +506,13 @@ The libraries and fonts the tool uses (versions are defined in `build.gradle`). 
 |Command line interface
 |Parses the command line options, creates the help text and the exit codes. The annotation processor `picocli-codegen` checks the option annotations while compiling.
 
-|https://fonts.google.com/specimen/Arimo[Arimo, Tinos, Cousine] (bundled `.ttf` files)
+|https://fonts.google.com/specimen/Arimo[Arimo], https://fonts.google.com/specimen/Tinos[Tinos], https://fonts.google.com/specimen/Cousine[Cousine]  (bundled `.ttf` files)
 |Substitute fonts
 |Metric compatible replacements for Arial/Helvetica, Times and Courier. They are embedded when fonts are missing for PDF/A-3 and offered in the _Fonts_ menu. Licensed under the Apache License 2.0.
+
+|link:src/main/resources/fonts/SymbolNeuEuro.ttf[Symbol Neu Euro] (bundled `.ttf` file, based on https://archive.debian.org/debian/pool/main/f/fonts-croscore/fonts-croscore_1.23.0.orig.tar.gz[Symbol Neu of the Chrome OS Core Fonts 1.23.0])
+|Substitute font for Symbol
+|Metric compatible replacement for the font Symbol (Greek letters, mathematical symbols). It is embedded when Symbol is missing in a document for PDF/A-3. Licensed under the Apache License 2.0. The font was extended by the Euro glyph (code 0xA0), copied from Arimo, and renamed because of that.
 
 |https://junit.org/junit5/[JUnit 5]
 |Tests

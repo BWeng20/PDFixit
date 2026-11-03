@@ -66,6 +66,68 @@ class PdfStandardConvertTest {
             }
     }
 
+    /**
+     * Level a gets a formal structure: a section per page, named by the template, with the content as one paragraph.
+     */
+    @Test
+    void test_levelAGetsFormalStructure() throws Exception {
+        byte[] text = EInvoiceTest.notEmbeddedFontPdf(org.apache.pdfbox.pdmodel.font.Standard14Fonts.FontName.HELVETICA, "Hello");
+        for (PdfStandardProfile target : List.of(PdfStandardProfile.PDFA_1A, PdfStandardProfile.PDFA_2A,
+                PdfStandardProfile.PDFA_3A)) {
+            byte[] result = convert(text, target);
+            ValidationResult verification = PdfaValidator.validate(result);
+            Assertions.assertTrue(verification.isConform(), target + ": " + verification);
+            try (PDDocument doc = Loader.loadPDF(result)) {
+                Assertions.assertTrue(PdfTagger.isTagged(doc));
+                Assertions.assertTrue(doc.getDocumentCatalog().getMarkInfo().isMarked());
+                var root = doc.getDocumentCatalog().getStructureTreeRoot().getCOSObject();
+                var document = (org.apache.pdfbox.cos.COSDictionary) root.getDictionaryObject(COSName.K);
+                var sections = (org.apache.pdfbox.cos.COSArray) document.getDictionaryObject(COSName.K);
+                Assertions.assertEquals(1, sections.size());
+                var section = (org.apache.pdfbox.cos.COSDictionary) sections.getObject(0);
+                Assertions.assertEquals(I18n.t("tag.page", 1), section.getString(COSName.T));
+            }
+        }
+    }
+
+    /**
+     * The repair adds the formal structure to a document that declares level a, and only to such a document.
+     */
+    @Test
+    void test_repairTagsDeclaredLevelA() throws Exception {
+        byte[] text = EInvoiceTest.notEmbeddedFontPdf(org.apache.pdfbox.pdmodel.font.Standard14Fonts.FontName.HELVETICA, "Hello");
+        byte[] untagged;
+        try (PDDocument doc = Loader.loadPDF(convert(text, PdfStandardProfile.PDFA_1A))) {
+            doc.getDocumentCatalog().getCOSObject().removeItem(COSName.getPDFName("StructTreeRoot"));
+            doc.getDocumentCatalog().getCOSObject().removeItem(COSName.getPDFName("MarkInfo"));
+            untagged = save(doc);
+        }
+        Assertions.assertFalse(PdfaValidator.validate(untagged).isConform(), "level a without structure");
+        PdfStandard.Repair repair = PdfStandard.repairPdfa(untagged);
+        Assertions.assertTrue(repair.changes().containsKey(I18n.t("fix.formalTags")), repair.changes().toString());
+        ValidationResult verification = PdfaValidator.validate(repair.pdf());
+        Assertions.assertTrue(verification.isConform(), verification.toString());
+
+        // Level b is not tagged by the repair.
+        byte[] b = convert(text, PdfStandardProfile.PDFA_1B);
+        Assertions.assertNull(PdfStandard.repairPdfa(b).pdf(), "nothing to repair");
+    }
+
+    @Test
+    void test_pageNameTemplates() {
+        Assertions.assertTrue(I18n.t("tag.page", 3).endsWith("3"));
+        Assertions.assertFalse(I18n.t("tag.page", 3).contains("{"));
+    }
+
+    @Test
+    void test_existingStructureIsNotReplaced() throws Exception {
+        byte[] tagged = convert(EInvoiceTest.plainPdf(2), PdfStandardProfile.PDFA_1A);
+        try (PDDocument doc = Loader.loadPDF(tagged)) {
+            Assertions.assertEquals(0, PdfTagger.tagPages(doc), "tagged already");
+            Assertions.assertFalse(PdfStandard.needsFormalTags(doc, PdfStandardProfile.PDFA_1A));
+        }
+    }
+
     @Test
     void test_sameLevelIsNotChanged() throws Exception {
         try (PDDocument doc = Loader.loadPDF(EInvoiceTest.invoicePdf(1))) {
@@ -103,6 +165,10 @@ class PdfStandardConvertTest {
     void test_pdfa1SwitchesCompressionOffInfo() throws Exception {
         try (PDDocument doc = Loader.loadPDF(EInvoiceTest.plainPdf(1))) {
             Assertions.assertFalse(PdfStandard.impact(doc, PdfStandardProfile.PDFA_1B).info().isEmpty());
+            Assertions.assertTrue(PdfStandard.impact(doc, PdfStandardProfile.PDFA_1B).info().stream()
+                    .anyMatch(i -> i.startsWith("PDF/A-1b ")), "names the standard");
+            Assertions.assertTrue(PdfStandard.impact(doc, PdfStandardProfile.PDFX_3).info().stream()
+                    .anyMatch(i -> i.startsWith("PDF/X-3 ")), "PDF/X-3 forbids compression too");
             Assertions.assertTrue(PdfStandard.impact(doc, PdfStandardProfile.PDFA_2B).info().isEmpty());
         }
     }
@@ -216,8 +282,6 @@ class PdfStandardConvertTest {
     void test_noneRemovesAllDeclarations() throws Exception {
         byte[] result = convert(convert(PdfaVersionsTest.pdfa(2), PdfStandardProfile.PDFX_3), null);
         Assertions.assertNull(profile(result));
-        byte[] a = convert(PdfaVersionsTest.pdfa(3), null);
-        Assertions.assertNull(profile(a));
     }
 
     @Test

@@ -98,9 +98,10 @@ Viele Firmen und Behörden verlangen PDFs, die über Jahre lesbar bleiben (Archi
 
 * *Standard ändern:* Die Schaltfläche *PDF-Standard...* öffnet einen Dialog mit den verfügbaren Standards. Zu jedem zeigt er in einfachen Worten, was geändert wird und – mit Warnsymbol – was verloren geht oder sich nicht beheben lässt. Vor der Bestätigung wird nichts verändert.
 * *Nicht jedes Dokument lässt sich umwandeln.* Das Programm repariert automatisch, was sich reparieren lässt, manche Dokumente lassen sich aber nicht in einen Standard bringen. Das Prüfergebnis sagt, was fehlt.
-* *Standard erhalten:* Ein Dokument, das einem Standard folgt, wird vor Änderungen geschützt, die ihn verletzen würden. Funktionen wie Kennwörter, Aufteilen oder das Anhängen von Dokumenten, die dem Standard nicht folgen, sind dann deaktiviert. Hat ein geladenes Dokument Mängel, die eine Reparatur beheben kann, fragt das Programm, bevor es etwas ändert.
-* *Rechnungen:* Das Anhängen einer Rechnung erfordert PDF/A-3. Hat das Dokument einen anderen Standard, fragt das Programm, ob umgestellt werden darf.
-* *Komprimierung:* PDF/A-1 verbietet Komprimierung. Das Programm schaltet die Option *Komprimierung* dann aus und teilt das mit.
+* *Standard erhalten:* Ein Dokument, das einem Standard folgt, wird vor Änderungen geschützt, die ihn verletzen würden. Funktionen wie Kennwörter, Aufteilen oder das Anhängen von Dokumenten, die dem Standard nicht folgen, sind dann deaktiviert. Hat ein geladenes Dokument Mängel, die eine Reparatur beheben kann, listet ein Dialog sie samt den geplanten Änderungen auf; geändert wird erst, wenn Sie auf *Reparieren* klicken.
+* *Reparatur:* Überall dient dieselbe Reparatur: im Dialog beim Laden, im Ergebnis von *PDF/A validieren* und im Ergebnis nach dem Ändern des Standards (dort nur, wenn Mängel bleiben; der Knopf verschwindet, wenn keine mehr da sind). Der Dialog lässt sich schließen und die Reparatur später über *PDF/A validieren* starten. Die Reparatur behebt Inhalte, die der Standard verbietet, ergänzt den sRGB-Ausgabeintent, bettet fehlende Schriften ein, gleicht Dokumentinformationen und XMP-Metadaten ab, entfernt ein ungültiges XMP-Erweiterungsschema und führt den Metadaten-Fixer von veraPDF aus. Ein Dokument, das Stufe a deklariert, erhält die formale Struktur der <<tagging,Stufe a>>. Die Reparatur ändert den Standard nie von selbst: Bei einem PDF/A-1- oder PDF/A-2-Dokument mit Anhängen, die nur PDF/A-3 erlaubt, fragt das Programm, ob es zum Behalten der Anhänge auf PDF/A-3b umgestellt werden soll.
+* [[tagging]]*Stufe a (getaggt):* Die Stufe a verlangt eine logische Struktur, die nur das Programm richtig beschreiben kann, das das Dokument erzeugt hat. Hat ein Dokument keine, ergänzt das Programm eine *formale* Struktur: ein Abschnitt je Seite, benannt nach der Vorlage `tag.page` („Seite 1“, „Seite 2“, ... bzw. „Page 1“, ... in der Sprache des Programms), mit dem Seiteninhalt als ein Absatz. Das erfüllt den Standard, aber ein Screenreader erhält keine Überschriften, Listen, Tabellen oder Bildbeschreibungen. Ein Dokument mit Struktur wird nie verändert. Die Struktur ergänzt auch die Reparatur bei einem Dokument, das Stufe a deklariert, oder die erneute Wahl derselben Stufe unter *PDF-Standard...*. Hat das Dokument einen anderen Standard, fragt das Programm, ob umgestellt werden darf.
+* *Komprimierung:* PDF/A-1, PDF/X-1a und PDF/X-3 verbieten Komprimierung. Für diese Standards ist die Option *Komprimierung* ausgeschaltet und nicht wählbar, das Programm teilt das mit.
 * *Standard entfernen:* Wenn "**keiner**" gesetzt wird, ist das Dokument danach ein gewöhnliches PDF. Eine E-Rechnung ist dadurch keine gültige E-Rechnung mehr.
 * Die Dokumentinformationen (Titel, Autor, ...) stehen an zwei Stellen in der Datei, da die Archivierungsstandards verlangen, dass beide gleich sind. Das Programm schreibt beide.
 
@@ -108,10 +109,10 @@ Viele Firmen und Behörden verlangen PDFs, die über Jahre lesbar bleiben (Archi
 Das Menü *Schriften* listet die Schriften des Dokuments.
 
 * *Ersetzen:* Eine gewählte Schrift kann durch eine der mitgelieferten ersetzt werden, die beste Übereinstimmung wird vorgeschlagen. Der Text behält seine Zeichen, verwendet aber die neue Schrift.
-* *Fehlende Schriften:* Nicht eingebettete Schriften werden eingebettet, wenn ein PDF-Standard es verlangt. Dafür dient eine ähnliche mitgelieferte Schrift (z. B. Arimo für Arial). Schriften ohne metrisch kompatiblen Ersatz (z. B. Calibri) sehen danach etwas anders aus. Symbolschriften (Symbol, Wingdings, ...), ungewöhnliche Schriften und Zeichen, die der Ersatz nicht hat (z. B. Chinesisch), lassen sich nicht ersetzen; das Programm meldet sie und lässt das Dokument unverändert.
+* *Fehlende Schriften:* Nicht eingebettete Schriften werden eingebettet, wenn ein PDF-Standard es verlangt. Dafür dient eine ähnliche mitgelieferte Schrift (z. B. Arimo für Arial). Schriften ohne metrisch kompatiblen Ersatz (z. B. Calibri) sehen danach etwas anders aus. Die Schrift Symbol wird durch Symbol Neu Euro ersetzt. Andere Symbolschriften (Wingdings, ZapfDingbats, ...), ungewöhnliche Schriften und Zeichen, die der Ersatz nicht hat (z. B. Chinesisch), lassen sich nicht ersetzen; das Programm meldet sie und lässt das Dokument unverändert.
 * *Eigene Schriften:* *Schriften > Schriften verwalten...* importiert TrueType-Dateien (`.ttf`), die dann wie die mitgelieferten verwendet werden können. Schriften mit PostScript-Konturen (OpenType/CFF), Schriftsammlungen (`.ttc`) und Schriften, die das Einbetten verbieten, sind nicht verwendbar. Fehlen einer Schrift Zeichen des Textes, wird sie mit einer Liste der fehlenden Zeichen abgelehnt.
 * *Duplikate zusammenführen:* Mehrfach vorhandene Schriften, z. B. eine Kopie je Seite, werden zusammengeführt, um die Datei zu verkleinern. Schriften, die sich so unterscheiden, dass der Text sich ändern würde, werden nicht zusammengeführt.
-* Die mitgelieferten Schriften Arimo, Tinos und Cousine stehen unter der Apache License 2.0.
+* Die mitgelieferten Schriften Arimo, Tinos, Cousine und Symbol Neu Euro stehen unter der Apache License 2.0.
 
 === Kennwörter merken
 
@@ -401,7 +402,7 @@ Ein PDF-Standard ist eine Vereinbarung darüber, was ein PDF enthalten darf, dam
 
 |PDF/A-1a
 |Archivierung
-|Wie 1b, dazu eine Struktur für Screenreader. Das Programm kann diese Struktur nicht erzeugen; die Prüfung sagt, was fehlt.
+|Wie 1b, dazu eine Struktur für Screenreader. Das Programm ergänzt nur eine formale Struktur, siehe <<tagging,Stufe a>>.
 
 |PDF/A-2b
 |Archivierung
@@ -413,7 +414,7 @@ Ein PDF-Standard ist eine Vereinbarung darüber, was ein PDF enthalten darf, dam
 
 |PDF/A-2a
 |Archivierung
-|Wie 2u, dazu eine Struktur für Screenreader (vom Programm nicht erzeugbar).
+|Wie 2u, dazu eine Struktur für Screenreader (das Programm ergänzt nur eine formale, siehe <<tagging,Stufe a>>).
 
 |PDF/A-3b
 |Archivierung, E-Rechnungen
@@ -421,7 +422,7 @@ Ein PDF-Standard ist eine Vereinbarung darüber, was ein PDF enthalten darf, dam
 
 |PDF/A-3u, PDF/A-3a
 |Archivierung, E-Rechnungen
-|Wie 3b, dazu zuverlässiges Kopieren des Textes (u) bzw. eine Struktur für Screenreader (a).
+|Wie 3b, dazu zuverlässiges Kopieren des Textes (u) bzw. eine Struktur für Screenreader (a, das Programm ergänzt nur eine formale, siehe <<tagging,Stufe a>>).
 
 |PDF/A-4
 |Archivierung (neueste)
@@ -507,6 +508,10 @@ Die vom Werkzeug verwendeten Bibliotheken und Schriften (die Versionen stehen in
 |https://fonts.google.com/specimen/Arimo[Arimo, Tinos, Cousine] (mitgelieferte `.ttf`-Dateien)
 |Ersatzschriften
 |Metrisch kompatible Ersatzschriften für Arial/Helvetica, Times und Courier. Sie werden eingebettet, wenn für PDF/A-3 Schriften fehlen, und im Menü _Schriften_ angeboten. Lizenziert unter der Apache License 2.0.
+
+|link:src/main/resources/fonts/SymbolNeuEuro.ttf[Symbol Neu Euro] (mitgelieferte `.ttf`-Datei, basierend auf https://archive.debian.org/debian/pool/main/f/fonts-croscore/fonts-croscore_1.23.0.orig.tar.gz[Symbol Neu der Chrome OS Core Fonts 1.23.0])
+|Ersatzschrift für Symbol
+|Metrisch kompatibler Ersatz für die Schrift Symbol (griechische Buchstaben, mathematische Zeichen). Sie wird eingebettet, wenn Symbol in einem Dokument für PDF/A-3 fehlt. Lizenziert unter der Apache License 2.0. Die Schrift wurde um das Euro-Zeichen (Code 0xA0) aus Arimo erweitert und deshalb umbenannt.
 
 |https://junit.org/junit5/[JUnit 5]
 |Tests

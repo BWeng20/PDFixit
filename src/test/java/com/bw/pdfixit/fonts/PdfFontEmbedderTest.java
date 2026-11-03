@@ -108,15 +108,15 @@ class PdfFontEmbedderTest {
     }
 
     @Test
-    void test_symbolFontIsRefusedAndNothingChanged() throws Exception {
+    void test_dingbatsFontIsRefusedAndNothingChanged() throws Exception {
         byte[] original;
-        try (PDDocument doc = document("αβ",Standard14Fonts.FontName.SYMBOL)) {
+        try (PDDocument doc = document("✁✂", Standard14Fonts.FontName.ZAPF_DINGBATS)) {
             original = save(doc);
         }
         try (PDDocument doc = Loader.loadPDF(original)) {
             FontEmbedException e = Assertions.assertThrows(FontEmbedException.class, () -> PdfFontEmbedder.embed(doc,
                     fontsOf(doc)));
-            Assertions.assertTrue(e.getMessage().contains("Symbol"), e.getMessage());
+            Assertions.assertTrue(e.getMessage().contains("Dingbats"), e.getMessage());
             for (COSDictionary f : fontsOf(doc))
                 Assertions.assertFalse(PdfFontEmbedder.isEmbedded(f), "must be unchanged");
         }
@@ -189,13 +189,107 @@ class PdfFontEmbedderTest {
     }
 
     @Test
-    void test_replaceRefusesSymbol() throws Exception {
-        try (PDDocument doc = document("αβ", Standard14Fonts.FontName.SYMBOL)) {
+    void test_replaceRefusesDingbats() throws Exception {
+        try (PDDocument doc = document("✁✂", Standard14Fonts.FontName.ZAPF_DINGBATS)) {
             var font = PdfFonts.list(doc).get(0);
             Assertions.assertNotNull(font.cannotReplaceReason());
             Assertions.assertThrows(FontEmbedException.class,
                     () -> PdfFontEmbedder.replace(doc, font.dictionary(), PdfFontEmbedder.bundled().get(0)));
             Assertions.assertFalse(PdfFontEmbedder.isEmbedded(font.dictionary()));
+        }
+    }
+
+    /**
+     * The font Symbol is replaced by Symbol Neu: same codes, the widths of the new font, a ToUnicode table.
+     */
+    @Test
+    void test_symbolFontIsEmbedded() throws Exception {
+        byte[] original;
+        // alpha beta gamma delta, integral and infinity
+        try (PDDocument doc = document("αβγδ∫∞", Standard14Fonts.FontName.SYMBOL)) {
+            original = save(doc);
+        }
+        byte[] fixed;
+        try (PDDocument doc = Loader.loadPDF(original)) {
+            var changes = PdfFontEmbedder.embed(doc, fontsOf(doc));
+            Assertions.assertTrue(changes.keySet().stream().anyMatch(k -> k.contains("Symbol-NeuEuro for Symbol")), changes.toString());
+            for (COSDictionary f : fontsOf(doc))
+                Assertions.assertTrue(PdfFontEmbedder.isEmbedded(f));
+            fixed = save(doc);
+        }
+        Assertions.assertEquals(List.of(), fontProblems(fixed));
+        try (PDDocument doc = Loader.loadPDF(fixed)) {
+            String text = new org.apache.pdfbox.text.PDFTextStripper().getText(doc);
+            Assertions.assertTrue(text.contains("αβγδ∫∞"), text);
+        }
+    }
+
+    /**
+     * Symbol Neu has a Euro (code 0xA0 of Symbol).
+     */
+    @Test
+    void test_symbolFontWithEuro() throws Exception {
+        byte[] original;
+        try (PDDocument doc = new PDDocument()) {
+            PDPage page = new PDPage();
+            doc.addPage(page);
+            try (PDPageContentStream cs = new PDPageContentStream(doc, page)) {
+                cs.beginText();
+                cs.setFont(new PDType1Font(Standard14Fonts.FontName.SYMBOL), 12);
+                cs.newLineAtOffset(72, 700);
+                // The Euro is no character of the encoding of PDFBox: write the code.
+                cs.showText("α");
+                cs.endText();
+            }
+            original = save(doc);
+        }
+        // Replace the code of alpha (0x61) by 0xA0 in the (uncompressed) content stream.
+        try (PDDocument doc = Loader.loadPDF(original)) {
+            var page = doc.getPage(0);
+            byte[] content = page.getContents().readAllBytes();
+            String text = new String(content, java.nio.charset.StandardCharsets.ISO_8859_1).replace("(a)", "( )");
+            Assertions.assertNotEquals(new String(content, java.nio.charset.StandardCharsets.ISO_8859_1), text);
+            var stream = new org.apache.pdfbox.pdmodel.common.PDStream(doc,
+                    new ByteArrayInputStream(text.getBytes(java.nio.charset.StandardCharsets.ISO_8859_1)));
+            page.setContents(stream);
+            PdfFontEmbedder.embed(doc, fontsOf(doc));
+            // Symbol documents give the Euro the width 750.
+            COSDictionary font = fontsOf(doc).iterator().next();
+            var widths = (org.apache.pdfbox.cos.COSArray) font.getDictionaryObject(COSName.WIDTHS);
+            Assertions.assertEquals(750, ((org.apache.pdfbox.cos.COSNumber) widths.getObject(0xA0 - font.getInt(COSName.FIRST_CHAR))).intValue());
+            Assertions.assertEquals(List.of(), fontProblems(save(doc)));
+        }
+    }
+
+    /**
+     * PDF/A-1 demands exactly one cmap in a symbolic TrueType font (6.3.7), which the other checks here don't see.
+     */
+    @Test
+    void test_symbolFontIsPdfa1Conform() throws Exception {
+        byte[] original;
+        try (PDDocument doc = document("αβγ", Standard14Fonts.FontName.SYMBOL)) {
+            original = save(doc);
+        }
+        byte[] pdfa1;
+        try (PDDocument doc = Loader.loadPDF(original)) {
+            com.bw.pdfixit.PdfStandard.convertTo(doc, com.bw.pdfixit.PdfStandardProfile.PDFA_1B);
+            var os = new ByteArrayOutputStream();
+            doc.save(os, org.apache.pdfbox.pdfwriter.compress.CompressParameters.NO_COMPRESSION);
+            pdfa1 = os.toByteArray();
+        }
+        var result = com.bw.pdfixit.PdfaValidator.validate(pdfa1);
+        Assertions.assertTrue(result.isConform(), result.toString());
+    }
+
+    @Test
+    void test_replaceSymbol() throws Exception {
+        try (PDDocument doc = document("αβγ", Standard14Fonts.FontName.SYMBOL)) {
+            var font = PdfFonts.list(doc).get(0);
+            Assertions.assertNull(font.cannotReplaceReason());
+            PdfFontEmbedder.replace(doc, font.dictionary(), PdfFontEmbedder.bundled().get(0));
+            Assertions.assertTrue(PdfFontEmbedder.isEmbedded(font.dictionary()));
+            Assertions.assertEquals("Symbol-NeuEuro", font.dictionary().getNameAsString(COSName.BASE_FONT));
+            Assertions.assertFalse(font.dictionary().containsKey(COSName.ENCODING), "symbolic: no encoding");
         }
     }
 

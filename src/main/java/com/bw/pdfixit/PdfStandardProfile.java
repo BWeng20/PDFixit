@@ -63,6 +63,14 @@ public enum PdfStandardProfile {
     }
 
     /**
+     * @return False if the standard is based on a PDF version without compressed object and xref streams
+     * (PDF/A-1, PDF/X-1a, PDF/X-3).
+     */
+    public boolean allowsCompression() {
+        return !(isPdfa() && part == 1) && this != PDFX_1A && this != PDFX_3;
+    }
+
+    /**
      * @return The part of the standard (for PDF/A the number after "PDF/A-").
      */
     public int part() {

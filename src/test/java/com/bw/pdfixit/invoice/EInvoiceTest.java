@@ -36,10 +36,10 @@ public class EInvoiceTest {
     }
 
     /**
-     * A PDF with a not embedded symbol font: there is no substitute, so it can't be PDF/A.
+     * A PDF with a not embedded Dingbats font: there is no substitute, so it can't be PDF/A.
      */
     public static byte[] nonConformPdf() throws IOException {
-        return notEmbeddedFontPdf(Standard14Fonts.FontName.SYMBOL, "αβ");
+        return notEmbeddedFontPdf(Standard14Fonts.FontName.ZAPF_DINGBATS, "✁✂");
     }
 
     /**

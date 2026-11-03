@@ -60,7 +60,7 @@ public final class PdfFontEmbedder {
     private static final COSName LAST_CHAR = COSName.LAST_CHAR;
     private static final int FLAG_FIXED = 1, FLAG_SERIF = 2, FLAG_SYMBOLIC = 4, FLAG_NONSYMBOLIC = 32,
             FLAG_ITALIC = 64, FLAG_FORCE_BOLD = 1 << 18;
-    private static final List<String> SYMBOL_FONTS = List.of("symbol", "zapfdingbats", "dingbats", "wingdings", "webdings");
+    private static final List<String> SYMBOL_FONTS = List.of("zapfdingbats", "dingbats", "wingdings", "webdings");
     private static final List<String> MONO_NAMES = List.of("courier", "mono", "consolas", "typewriter", "lucidaconsole");
     private static final List<String> SANS_NAMES = List.of("sans", "arial", "helvetica", "verdana", "calibri", "tahoma",
             "segoe", "trebuchet", "univers", "frutiger", "myriad", "gothic");
@@ -146,6 +146,8 @@ public final class PdfFontEmbedder {
             return cidReason(font);
         if (COSName.TYPE3.equals(subtype))
             return I18n.t("fontemb.type3");
+        if (isAdobeSymbol(font))
+            return null;
         if (containsAny(lower, SYMBOL_FONTS))
             return I18n.t("fontemb.symbol");
         if (isEmbedded(font) && !font.containsKey(COSName.ENCODING))
@@ -168,6 +170,11 @@ public final class PdfFontEmbedder {
         String reason = cannotReplaceReason(font);
         if (reason != null)
             throw new FontEmbedException(reason);
+        if (isAdobeSymbol(font)) {
+            // Only Symbol Neu Euro can replace Symbol, the chosen font is ignored.
+            applySymbol(document, planSymbol(font));
+            return;
+        }
         if (COSName.TYPE0.equals(font.getCOSName(COSName.SUBTYPE))) {
             try (TrueTypeFont ttf = source.open()) {
                 CidPlan plan = planCid(font, baseName(font), source, ttf);
@@ -365,6 +372,7 @@ public final class PdfFontEmbedder {
         List<Job> jobs = new ArrayList<>();
         Set<String> impossible = new TreeSet<>();
         List<COSDictionary> cidFonts = new ArrayList<>();
+        List<COSDictionary> symbolFonts = new ArrayList<>();
         for (COSDictionary font : fonts) {
             if (isEmbedded(font))
                 continue;
@@ -377,6 +385,8 @@ public final class PdfFontEmbedder {
                     cidFonts.add(font);
                 else
                     impossible.add(I18n.t("fontemb.composite", name, reason));
+            } else if (isAdobeSymbol(font)) {
+                symbolFonts.add(font);
             } else if (containsAny(lower, SYMBOL_FONTS)) {
                 impossible.add(I18n.t("fontemb.symbolFont", name));
             } else {
@@ -385,6 +395,20 @@ public final class PdfFontEmbedder {
         }
         if (!impossible.isEmpty())
             throw new FontEmbedException(I18n.t("fontemb.noSubstitute", String.join(", ", impossible)));
+        // Plan the font Symbol too, before anything is changed.
+        List<SymbolPlan> symbolPlans = new ArrayList<>();
+        for (COSDictionary font : symbolFonts)
+            symbolPlans.add(planSymbol(font));
+        Map<String, Integer> changes = embedBundled(document, jobs, cidFonts);
+        for (SymbolPlan plan : symbolPlans) {
+            applySymbol(document, plan);
+            changes.merge("Embedded font Symbol-NeuEuro for " + plan.name, 1, Integer::sum);
+        }
+        return changes;
+    }
+
+    private static Map<String, Integer> embedBundled(PDDocument document, List<Job> jobs, List<COSDictionary> cidFonts)
+            throws IOException {
         if (cidFonts.isEmpty())
             return run(document, jobs);
 
@@ -405,6 +429,143 @@ public final class PdfFontEmbedder {
         } finally {
             for (CidPlan plan : plans)
                 plan.ttf.close();
+        }
+    }
+
+
+    // ---------------------------------------------------------------- the font Symbol
+
+    /**
+     * The font that replaces Symbol: Symbol Neu of the Chrome OS Core Fonts (Apache License 2.0, like the other
+     * bundled fonts), extended by the Euro (code 0xA0, glyph from Arimo) and renamed. It is a metric compatible clone of Symbol, a symbolic TrueType font whose (3,0) cmap has the
+     * codes of the Symbol encoding at U+F000 + code.
+     * The codes of the document stay as they are, so the pages don't change.
+     */
+    private static final String SYMBOL_RESOURCE = "/fonts/SymbolNeuEuro.ttf";
+    private static final java.util.regex.Pattern ADOBE_SYMBOL =
+            java.util.regex.Pattern.compile("symbol(mt)?(bold)?(italic|oblique)?");
+
+    /**
+     * Checks if the font is the font Symbol (a simple font), which Symbol Neu Euro can replace.
+     */
+    static boolean isAdobeSymbol(COSDictionary font) {
+        COSName subtype = font.getCOSName(COSName.SUBTYPE);
+        if (COSName.TYPE0.equals(subtype) || COSName.TYPE3.equals(subtype))
+            return false;
+        return ADOBE_SYMBOL.matcher(baseName(font).toLowerCase(Locale.ROOT).replaceAll("[^a-z]", "")).matches();
+    }
+
+    /**
+     * Name of the replacement of Symbol, as shown to the user.
+     */
+    public static String symbolFontName() {
+        return "Symbol Neu Euro";
+    }
+
+    private static byte[] symbolProgram() throws IOException {
+        try (InputStream is = PdfFontEmbedder.class.getResourceAsStream(SYMBOL_RESOURCE)) {
+            if (is == null)
+                throw new IOException("Substitute font missing: " + SYMBOL_RESOURCE);
+            return is.readAllBytes();
+        }
+    }
+
+    /**
+     * What to write for a font Symbol.
+     */
+    private record SymbolPlan(COSDictionary font, String name, int first, int last, int[] widths,
+                              Map<Integer, Integer> unicodes) {
+    }
+
+    private static SymbolPlan planSymbol(COSDictionary font) throws IOException {
+        final String name = baseName(font);
+        try (TrueTypeFont ttf = new TTFParser().parse(new RandomAccessReadBuffer(symbolProgram()))) {
+            var cmap = ttf.getCmap().getSubtable(3, 0);
+            if (cmap == null)
+                throw new IOException("Unexpected cmap of " + SYMBOL_RESOURCE);
+            final double scale = 1000.0 / ttf.getUnitsPerEm();
+            boolean hasRange = font.getInt(FIRST_CHAR, -1) >= 0 && font.getDictionaryObject(COSName.WIDTHS) instanceof COSArray;
+            COSArray oldWidths = hasRange && font.getDictionaryObject(COSName.WIDTHS) instanceof COSArray w ? w : null;
+            int first = hasRange ? Math.min(255, font.getInt(FIRST_CHAR)) : 32;
+            int last = hasRange ? Math.min(255, Math.max(first, font.getInt(LAST_CHAR, 255))) : 255;
+            Encoding builtIn = org.apache.pdfbox.pdmodel.font.encoding.SymbolEncoding.INSTANCE;
+            Encoding original = font.getDictionaryObject(COSName.ENCODING) instanceof COSDictionary d
+                    ? new DictionaryEncoding(d, false, builtIn) : builtIn;
+            GlyphList glyphList = GlyphList.getAdobeGlyphList();
+            int[] widths = new int[last - first + 1];
+            Map<Integer, Integer> unicodes = new TreeMap<>();
+            Set<String> missing = new TreeSet<>();
+            for (int code = first; code <= last; ++code) {
+                int gid = cmap.getGlyphId(0xF000 + code);
+                String glyphName = original.contains(code) ? original.getName(code) : ".notdef";
+                boolean needed = oldWidths != null && code - first < oldWidths.size()
+                        && oldWidths.getObject(code - first) instanceof COSNumber n && n.floatValue() > 0;
+                if (gid == 0) {
+                    if (needed)
+                        missing.add(".notdef".equals(glyphName) ? "#" + code : glyphName);
+                    continue;
+                }
+                int byName = ".notdef".equals(glyphName) ? 0 : ttf.nameToGID(glyphName);
+                if (byName != 0 && byName != gid) {
+                    // The document gives the code another meaning: a symbolic font can't express that.
+                    if (needed)
+                        missing.add(glyphName);
+                    continue;
+                }
+                widths[code - first] = (int) Math.round(ttf.getAdvanceWidth(gid) * scale);
+                String text = glyphList.toUnicode(".notdef".equals(glyphName) ? ttf.getPostScript().getName(gid) : glyphName);
+                if (text != null && !text.isEmpty())
+                    unicodes.put(code, text.codePointAt(0));
+            }
+            if (!missing.isEmpty())
+                throw new FontEmbedException(I18n.t("fontemb.missing", name, symbolFontName(),
+                        String.join(" ", missing.stream().limit(12).toList()) + (missing.size() > 12 ? " ..." : "")));
+            return new SymbolPlan(font, name, first, last, widths, unicodes);
+        }
+    }
+
+    private static void applySymbol(PDDocument document, SymbolPlan plan) throws IOException {
+        byte[] data = symbolProgram();
+        try (TrueTypeFont ttf = new TTFParser().parse(new RandomAccessReadBuffer(data))) {
+            PDStream program = new PDStream(document, new ByteArrayInputStream(data), COSName.FLATE_DECODE);
+            program.getCOSObject().setInt(COSName.getPDFName("Length1"), data.length);
+            COSDictionary font = plan.font;
+            fillDescriptor(font, new Variant(Family.SANS, false, false), ttf, program.getCOSObject());
+            COSDictionary desc = font.getCOSDictionary(COSName.FONT_DESC);
+            desc.setInt(COSName.FLAGS, FLAG_SYMBOLIC);
+            font.setItem(COSName.SUBTYPE, COSName.TRUE_TYPE);
+            font.setName(COSName.BASE_FONT, ttf.getName());
+            font.setInt(FIRST_CHAR, plan.first);
+            font.setInt(LAST_CHAR, plan.last);
+            COSArray widths = new COSArray();
+            for (int w : plan.widths)
+                widths.add(COSInteger.get(w));
+            font.setItem(COSName.WIDTHS, widths);
+            // A symbolic TrueType font has no encoding: the code selects the glyph through the (3,0) cmap.
+            font.removeItem(COSName.ENCODING);
+            font.removeItem(COSName.TO_UNICODE);
+            if (plan.unicodes.isEmpty())
+                return;
+            StringBuilder cmap = new StringBuilder("/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n"
+                    + "/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n"
+                    + "/CMapName /Adobe-Identity-UCS def\n/CMapType 2 def\n"
+                    + "1 begincodespacerange\n<00> <FF>\nendcodespacerange\n");
+            List<Map.Entry<Integer, Integer>> entries = new ArrayList<>(plan.unicodes.entrySet());
+            for (int i = 0; i < entries.size(); i += 100) {
+                List<Map.Entry<Integer, Integer>> chunk = entries.subList(i, Math.min(entries.size(), i + 100));
+                cmap.append(chunk.size()).append(" beginbfchar\n");
+                for (var e : chunk) {
+                    cmap.append(String.format("<%02X> <", e.getKey()));
+                    for (byte b : new String(Character.toChars(e.getValue())).getBytes(java.nio.charset.StandardCharsets.UTF_16BE))
+                        cmap.append(String.format("%02X", b & 0xFF));
+                    cmap.append(">\n");
+                }
+                cmap.append("endbfchar\n");
+            }
+            cmap.append("endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend\n");
+            PDStream toUnicode = new PDStream(document, new ByteArrayInputStream(
+                    cmap.toString().getBytes(java.nio.charset.StandardCharsets.ISO_8859_1)), COSName.FLATE_DECODE);
+            font.setItem(COSName.TO_UNICODE, toUnicode.getCOSObject());
         }
     }
 

@@ -58,6 +58,10 @@ public final class StandardDialog extends JDialog {
     private final byte[] pdf;
     private final PdfStandardProfile current;
     private final float currentVersion;
+    /**
+     * The document declares a level a but has no structure: applying the level again adds the formal one.
+     */
+    private final boolean needsTags;
     private static final Float[] VERSIONS = {1.4f, 1.5f, 1.6f, 1.7f, 2.0f};
     private final JComboBox<Float> versions = new JComboBox<>();
     private final JLabel hints = new JLabel();
@@ -72,6 +76,13 @@ public final class StandardDialog extends JDialog {
         this.pdf = pdf;
         this.current = current;
         this.currentVersion = version;
+        boolean tags;
+        try (var document = org.apache.pdfbox.Loader.loadPDF(pdf)) {
+            tags = PdfStandard.needsFormalTags(document, current);
+        } catch (java.io.IOException e) {
+            tags = false;
+        }
+        this.needsTags = tags;
         setContentPane(createContent());
         pack();
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
@@ -212,7 +223,7 @@ public final class StandardDialog extends JDialog {
             worker.cancel(true);
         final Float version = version();
         versions.setEnabled(target == null || !target.isPdfa() || target.part() != 4);
-        if (target == current && version == null) {
+        if (target == current && version == null && !needsTags) {
             apply.setEnabled(false);
             hints.setIcon(null);
             hints.setText(I18n.t("standard.isCurrent"));

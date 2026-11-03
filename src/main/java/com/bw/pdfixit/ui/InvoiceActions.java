@@ -1,5 +1,8 @@
 package com.bw.pdfixit.ui;
 
+import java.awt.BorderLayout;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
 import com.bw.pdfixit.I18n;
 import com.bw.pdfixit.Log;
 import com.bw.pdfixit.Preferences;
@@ -223,7 +226,23 @@ final class InvoiceActions {
                 SwingUtilities.invokeLater(() -> {
                     VerificationResultPanel panel = new VerificationResultPanel();
                     panel.setResult(result);
-                    JOptionPane.showMessageDialog(ui, panel, I18n.t("common.pdfa"), switch (result.getState()) {
+                    JPanel content = new JPanel(new BorderLayout(0, 8));
+                    content.add(panel, BorderLayout.CENTER);
+                    if (result.getState() == ValidationResult.State.NOT_CONFORM) {
+                        // Repairing is always possible here, also if it was declined when the document was loaded.
+                        JLabel done = new JLabel();
+                        JPanel south = new JPanel(new BorderLayout(0, 6));
+                        south.add(ui.createVeraPdfFixerRow(panel, actions -> {
+                            done.setText("<html>" + String.join("<br>", actions.stream()
+                                    .map(a -> "&bull; " + a.replace("&", "&amp;").replace("<", "&lt;")).toList()) + "</html>");
+                            java.awt.Window w = SwingUtilities.getWindowAncestor(done);
+                            if (w != null)
+                                w.pack();
+                        }), BorderLayout.NORTH);
+                        south.add(done, BorderLayout.CENTER);
+                        content.add(south, BorderLayout.SOUTH);
+                    }
+                    JOptionPane.showMessageDialog(ui, content, I18n.t("common.pdfa"), switch (result.getState()) {
                         case CONFORM -> JOptionPane.INFORMATION_MESSAGE;
                         case NOT_DECLARED -> JOptionPane.WARNING_MESSAGE;
                         default -> JOptionPane.ERROR_MESSAGE;

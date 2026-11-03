@@ -37,6 +37,7 @@ public class VerificationResultPanel extends JPanel {
 
     private final String[] COLUMNS = {I18n.t("verify.col.rule"), I18n.t("verify.col.message"), I18n.t("verify.col.count")};
 
+    private ValidationResult result;
     private List<ValidationResult.Finding> findings = List.of();
     private final JTable table;
     private final JScrollPane tableScroll;
@@ -86,7 +87,7 @@ public class VerificationResultPanel extends JPanel {
         table.getColumnModel().getColumn(0).setPreferredWidth(170);
         table.getColumnModel().getColumn(1).setPreferredWidth(430);
         table.getColumnModel().getColumn(2).setPreferredWidth(50);
-        table.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
         table.addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent e) {
@@ -116,6 +117,7 @@ public class VerificationResultPanel extends JPanel {
      * Shows a result: the table of the findings, or a message for the other states.
      */
     public void setResult(ValidationResult result) {
+        this.result = result;
         switch (result.getState()) {
             case CONFORM -> setMessage(I18n.t("verify.conform"));
             case NOT_DECLARED -> setMessage(ValidationResult.notDeclaredText());
@@ -123,6 +125,7 @@ public class VerificationResultPanel extends JPanel {
             case NOT_CONFORM -> {
                 findings = result.getFindings();
                 ((AbstractTableModel) table.getModel()).fireTableDataChanged();
+                fitColumns();
                 center.removeAll();
                 center.add(tableScroll, BorderLayout.CENTER);
                 text = heading() + "\n" + String.join("\n", result.toLines());
@@ -133,6 +136,24 @@ public class VerificationResultPanel extends JPanel {
         }
     }
 
+    /**
+     * The rule and count columns get the width of their content, the message column the rest.
+     */
+    private void fitColumns() {
+        var fm = table.getFontMetrics(table.getFont());
+        var headerFm = table.getTableHeader().getFontMetrics(table.getTableHeader().getFont());
+        for (int column : new int[]{0, 2}) {
+            int width = headerFm.stringWidth(table.getColumnName(column)) + 24;
+            for (int row = 0; row < table.getRowCount(); ++row)
+                width = Math.max(width, fm.stringWidth(String.valueOf(table.getValueAt(row, column))) + 16);
+            var col = table.getColumnModel().getColumn(column);
+            col.setMinWidth(width);
+            col.setMaxWidth(width);
+            col.setPreferredWidth(width);
+        }
+        table.getColumnModel().getColumn(1).setPreferredWidth(430);
+    }
+
     private void setMessage(String m) {
         message.setText(m);
         center.removeAll();
@@ -140,6 +161,13 @@ public class VerificationResultPanel extends JPanel {
         text = heading() + "\n" + m;
         revalidate();
         repaint();
+    }
+
+    /**
+     * @return The result that is shown, null if none was set.
+     */
+    public ValidationResult getResult() {
+        return result;
     }
 
     /**

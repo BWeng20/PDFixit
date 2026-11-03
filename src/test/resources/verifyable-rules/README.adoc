@@ -1,0 +1,99 @@
+= Files that violate the rules of veraPDF
+
+These PDFs violate as many rules of veraPDF (1.30.2) as possible, for each PDF/A standard. They are test material: veraPDF can read them, but they are not conforming on purpose, and most of them can't be shown in a viewer. `doc/verification-rules.adoc` lists all rules of each standard.
+
+They are used by `VerifiableRulesRepairTest`, which repairs each file in memory and checks which rules the repair fixes.
+
+== Files
+
+* *`PDFA-<level>_all-errors.pdf`* (11 files): the main file of a standard, with all violations that fit into one file. The files are nearly the same for all levels, because the standard you check them against decides which rules apply. Each declares its own PDF/A level correctly (so the repair knows the standard). Only `PDFA-1b` also has a font with an invalid `FontFile3`, and attachments are only in the files of PDF/A-3 and PDF/A-4f (before PDF/A-3 they are a violation, see `embedded-file`).
+* *`supplements/PDFA-<part>_<name>.pdf`*: violations which exclude each other or the main file. A supplement applies to all levels of its part (part 2: 2a, 2b and 2u).
+
+[options="header"]
+|===
+|Supplement |Parts |Violation
+|`structure` |1-3 |Junk before the header (`6.1.2-1`), for part 1 also an xref stream (`6.1.4-3`)
+|`embedded-file` |1, 2, 4 |An embedded file, which is forbidden before PDF/A-3
+|`encryption` |1-4 |`Encrypt` in the trailer (`6.1.3-2`)
+|`linearized` |1 |Linearized file whose first and last trailer have different `ID`s (`6.1.3-4`)
+|`no-metadata` |1-4 |No `Metadata` stream in the catalog; for part 4 also no `EmbeddedFiles` (4f: `6.9-5`)
+|`xmp-broken` |1-4 |XMP is not well-formed and not UTF-8
+|`xmp-no-identification` |1-4 |No PDF/A identification (`pdfaid`) and an extension schema container with a wrong prefix
+|`xmp-wrong-identification` |1-4 |PDF/A identification with a wrong prefix and wrong values
+|`icc-cmyk` |2-4 |`ICCBased` CMYK with overprint mode 1 (`6.2.4.2-2`), the same profile in the output intent (`6.2.4.2-3`, part 4)
+|`tagging` |1-4 |Structure tree with a circular and a faulty `RoleMap`, an unmapped type, a PUA character in `ActualText` or without it; for part 4 also a 3D stream with an invalid subtype
+|===
+
+== Rules the files violate
+
+Per standard, the main file and the supplements of its part together. A rule counts if veraPDF reports it at least once.
+
+[options="header"]
+|===
+|Standard |Rules |Violated |Not violated
+|PDF/A-1a |135 |131 (97 %) |4
+|PDF/A-1b |129 |126 (98 %) |3
+|PDF/A-2a |153 |149 (97 %) |4
+|PDF/A-2b |144 |140 (97 %) |4
+|PDF/A-2u |146 |142 (97 %) |4
+|PDF/A-3a |155 |151 (97 %) |4
+|PDF/A-3b |146 |142 (97 %) |4
+|PDF/A-3u |148 |144 (97 %) |4
+|PDF/A-4 |109 |106 (97 %) |3
+|PDF/A-4e |109 |106 (97 %) |3
+|PDF/A-4f |109 |106 (97 %) |3
+|===
+
+Rules which these files can't violate:
+
+[options="header"]
+|===
+|Rule |Standards |Reason
+|6.1.12-7 |PDF/A-1a, PDF/A-1b |More than 8,388,607 objects: veraPDF counts the objects it really loads, the file would be about 200 MB.
+|6.1.13-7 |PDF/A-2a, PDF/A-2b, PDF/A-2u, PDF/A-3a, PDF/A-3b, PDF/A-3u |More than 8,388,607 objects: veraPDF counts the objects it really loads, the file would be about 200 MB.
+|6.2.10.2-2 |PDF/A-4, PDF/A-4e, PDF/A-4f |Font with an unknown Subtype: veraPDF does not treat it as a font.
+|6.2.10.2-3 |PDF/A-4, PDF/A-4e, PDF/A-4f |Font without BaseFont: the checker of veraPDF fails.
+|6.2.10.2-7 |PDF/A-4, PDF/A-4e, PDF/A-4f |FontFile3 with an invalid Subtype: veraPDF fails or does not evaluate the rule.
+|6.2.11.2-2 |PDF/A-2a, PDF/A-2b, PDF/A-2u, PDF/A-3a, PDF/A-3b, PDF/A-3u |Font with an unknown Subtype: veraPDF does not treat it as a font.
+|6.2.11.2-3 |PDF/A-2a, PDF/A-2b, PDF/A-2u, PDF/A-3a, PDF/A-3b, PDF/A-3u |Font without BaseFont: the checker of veraPDF fails.
+|6.2.11.2-7 |PDF/A-2a, PDF/A-2b, PDF/A-2u, PDF/A-3a, PDF/A-3b, PDF/A-3u |FontFile3 with an invalid Subtype: veraPDF fails or does not evaluate the rule.
+|6.3.2-2 |PDF/A-1a, PDF/A-1b |Font without Subtype: veraPDF does not treat it as a font.
+|6.3.2-3 |PDF/A-1a, PDF/A-1b |Font without BaseFont: the checker of veraPDF fails with a script error.
+|6.3.2-7 |PDF/A-1a |FontFile3 with an invalid Subtype: only checkable for PDF/A-1b, veraPDF fails for the other standards.
+|===
+
+== What the repair fixes
+
+`VerifiableRulesRepairTest` repairs every file in memory with `PdfStandard.repairPdfa` (the repair that the app offers for a loaded document and in the verification dialog) and checks the result against the standard of the file. A rule is *fixed* if veraPDF reports it before the repair and no file of the standard violates it after the repair.
+
+[options="header"]
+|===
+|Standard |Rules violated by the files |Fixed by the repair |Share
+|PDF/A-1a |131 |59 |45 %
+|PDF/A-1b |126 |58 |46 %
+|PDF/A-2a |149 |54 |36 %
+|PDF/A-2b |140 |54 |39 %
+|PDF/A-2u |142 |54 |38 %
+|PDF/A-3a |151 |58 |38 %
+|PDF/A-3b |142 |58 |41 %
+|PDF/A-3u |144 |58 |40 %
+|PDF/A-4 |106 |28 |26 %
+|PDF/A-4e |106 |28 |26 %
+|PDF/A-4f |106 |28 |26 %
+|===
+
+How to read this:
+
+* The share is *conservative*: rules which only appear in files whose standard the repair can't know (`no-metadata`, `xmp-broken`, `xmp-no-identification`, `xmp-wrong-identification`) count as not fixed, because the repair does not guess a standard for them. `embedded-file`: the repair keeps PDF/A-1 and PDF/A-2 and only offers the switch to PDF/A-3b (`upgrade-offered`); the attachments stay a violation. The switch happens only with the option `upgradeToPdfa3`, which the app sets after asking the user (`test_theStandardIsSwitchedOnlyOnRequest` checks that the result is then conforming).
+* The repair fixes, for example: the layout of header, trailer, xref table and streams (the file is written again), forbidden keys of images, forms, graphics states and annotations (`Alternates`, `OPI`, `Interpolate`, transfer functions, reference XObjects), actions and additional actions, missing fonts, the XMP metadata (attributes of the packet, extension schemas, the difference to the document information), the optional content order and name, and associated files of PDF/A-3.
+* The repair does not fix, for example: the content of page streams (undefined operators, `q` nesting above 28, LZW in inline images), limits of numbers, strings, names and `DeviceN`, many font rules (encodings, glyph widths, CMaps, `CIDSet`), colour spaces and output intents with an invalid profile, blend modes, JPEG 2000, signatures, `Encrypt` (the app can't decrypt), transparency in PDF/A-1, and the tagging of level a (the app only adds a formal structure).
+* `expected-repair.csv` records the outcome per file and standard (status, fixed rules, introduced rules). The test fails if the repair gets better or worse, so a change of the repair is a visible decision.
+
+Columns of `expected-repair.csv`: file, standard, status, fixed rules, introduced rules, and `upgrade-offered` if the file has attachments before PDF/A-3 and the repair could switch the standard. Status: `KEPT` (repaired, standard kept), `NO_STANDARD` (the file declares no valid part of PDF/A, the repair only fixes content and declares nothing), `UNCHANGED` (nothing to repair) and `FAILED` (the repair threw an exception, e.g. for an encrypted file).
+
+To update the table and the file after a change of the repair, run the test with the environment variable `UPDATE_SNAPSHOT=true`: it writes `build/verifiable-rules-expected-repair.csv` and `build/verifiable-rules-summary.md`. Copy the first one here and the table into this README.
+
+== Notes
+
+* The files were generated by a script which is not part of the project. The font programs inside are `SymbolNeuEuro.ttf` of the project and a Type 1 font (Standard Symbols PS); the ICC profile in `icc-cmyk` is a minimal profile written for these tests, not meant for real colour conversion.
+* Whether a file violates a rule depends on veraPDF. Another validator may report other rules.

@@ -62,11 +62,11 @@ class VeraPdfFixerTest {
         try {
             proxy.loaderFinished(Loader.loadPDF(mismatchingPdfa1()), new MergeOptions());
             Assertions.assertFalse(proxy.validatePdfa().isConform());
-            PdfaValidator.MetadataFix fix = proxy.fixWithVeraPdf();
-            Assertions.assertFalse(fix.fixes().isEmpty(), fix.status());
+            Map<String, Integer> changes = proxy.fixPdfa();
+            Assertions.assertFalse(changes.isEmpty());
             Assertions.assertTrue(proxy.isModified());
             Assertions.assertTrue(proxy.validatePdfa().isConform());
-            Assertions.assertTrue(proxy.fixWithVeraPdf().fixes().isEmpty(), "nothing left to fix");
+            Assertions.assertTrue(proxy.fixPdfa().isEmpty(), "nothing left to fix");
         } finally {
             proxy.close();
         }
@@ -89,21 +89,11 @@ class VeraPdfFixerTest {
     }
 
     @Test
-    void test_removedIdentificationIsNotApplied() throws Exception {
+    void test_identificationRemovalIsNotApplied() throws Exception {
         byte[] pdf = withJavaScript();
         Assertions.assertFalse(PdfaValidator.validate(pdf).isConform());
         PdfaValidator.MetadataFix fix = PdfaValidator.fixMetadata(pdf);
         System.out.println("veraPDF metadata fixer on a document with JavaScript: " + fix.status() + " " + fix.fixes());
         Assertions.assertFalse(fix.applied(), "the identification would be removed: " + fix.status());
-
-        DocumentProxy proxy = new DocumentProxy(new RenderQueue());
-        try {
-            proxy.loaderFinished(Loader.loadPDF(pdf), new MergeOptions());
-            Assertions.assertFalse(proxy.fixWithVeraPdf().applied());
-            Assertions.assertEquals(2, PdfStandard.pdfaPart(proxy.getDocument()), "still PDF/A-2");
-            Assertions.assertFalse(proxy.isModified());
-        } finally {
-            proxy.close();
-        }
     }
 }

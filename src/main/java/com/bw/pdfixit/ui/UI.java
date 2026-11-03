@@ -2145,15 +2145,20 @@ public class UI extends JSplitPane {
             }
         }
         if (hasDocument && PdfStandard.pdfaPart(documentProxy.getDocument()) > 0) {
-            if (PdfStandard.pdfaPart(documentProxy.getDocument()) == 1 && compression.isSelected()) {
-                compression.setSelected(false);
-                toaster.toast(ToastType.INFO, 10000, I18n.t("toast.compressionOff"));
-            }
             // The result of a switch is shown together with its changes, see doChangeStandard.
             if (!switchingStandard)
                 reportPdfaViolations();
         }
         pdfaMode = hasDocument && PdfStandard.pdfaPart(documentProxy.getDocument()) > 0;
+        // Compressed object streams are not allowed by every standard: off and not selectable then.
+        PdfStandardProfile declared = hasDocument ? PdfStandard.profile(documentProxy.getDocument()) : null;
+        final boolean compressionAllowed = declared == null || declared.allowsCompression();
+        if (!compressionAllowed && compression.isSelected()) {
+            compression.setSelected(false);
+            toaster.toast(ToastType.INFO, 10000, I18n.t("toast.compressionOff", declared));
+        }
+        compression.setEnabled(compressionAllowed);
+        compression.setToolTipText(compressionAllowed ? null : I18n.t("toast.compressionOff", declared));
         final boolean pdfa = pdfaMode;
         final String notAllowed = I18n.t("ui.pdfaNotAllowed");
 
@@ -2239,10 +2244,12 @@ public class UI extends JSplitPane {
             VerificationResultPanel result = new VerificationResultPanel();
             result.setResult(verification);
             content.add(result, BorderLayout.CENTER);
-            content.add(createVeraPdfFixerRow(result, actions -> {
-                actions.forEach(a -> shown.merge(a, 1, Integer::sum));
-                changesLabel.setText(switchChangesHtml(target, shown));
-            }), BorderLayout.SOUTH);
+            // Only offered if the verification found violations.
+            if (verification.getState() == ValidationResult.State.NOT_CONFORM)
+                content.add(createVeraPdfFixerRow(result, actions -> {
+                    actions.forEach(a -> shown.merge(a, 1, Integer::sum));
+                    changesLabel.setText(switchChangesHtml(target, shown));
+                }), BorderLayout.SOUTH);
         } else if (target != null) {
             content.add(new JLabel("<html><i>" + escapeHtml(target.notVerifiableReason()) + "</i></html>"),
                     BorderLayout.CENTER);
@@ -2269,59 +2276,68 @@ public class UI extends JSplitPane {
     }
 
     /**
-     * Creates the row with the button that runs the fixer of veraPDF and verifies again. The result panel shows the
+     * Creates the row with the button that repairs the document ({@link PdfStandard#repairPdfa}) and verifies again. The result panel shows the
      * new verification.
      *
      * @param onActions Called with the lines for the list of changes: what the fixer did, also if it could not
      *                  repair the document or failed.
      */
-    private JPanel createVeraPdfFixerRow(VerificationResultPanel result,
+    JPanel createVeraPdfFixerRow(VerificationResultPanel result,
                                          java.util.function.Consumer<java.util.List<String>> onActions) {
         final DocumentProxy proxy = documentProxy;
         JButton run = new JButton(I18n.t("ui.fixer.run"));
         run.setToolTipText(I18n.t("ui.fixer.run.tip"));
         run.addActionListener(e -> {
+            // Switching the standard needs the consent of the user.
+            boolean upgrade = false;
+            if (proxy.pdfaUpgradeOffered()) {
+                Object[] options = {I18n.t("ui.upgrade.yes"), I18n.t("ui.upgrade.no"), I18n.t("common.cancel")};
+                int answer = JOptionPane.showOptionDialog(run, I18n.t("ui.upgrade.question",
+                                PdfStandard.pdfaLabel(proxy.getDocument())), I18n.t("common.pdfa"),
+                        JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+                if (answer != 0 && answer != 1)
+                    return;
+                upgrade = answer == 0;
+            }
+            final boolean switchStandard = upgrade;
             run.setEnabled(false);
             run.setText(I18n.t("ui.fixer.running"));
             new SwingWorker<Object[], Void>() {
                 @Override
                 protected Object[] doInBackground() throws Exception {
-                    var fix = proxy.fixWithVeraPdf();
+                    var changes = proxy.fixPdfa(switchStandard);
                     ValidationResult verification;
                     try {
                         verification = proxy.validatePdfa();
                     } catch (Exception ex) {
                         verification = ValidationResult.failed(ex.getMessage());
                     }
-                    return new Object[]{fix, verification};
+                    return new Object[]{changes, verification};
                 }
 
                 @Override
                 protected void done() {
                     java.util.List<String> actions = new java.util.ArrayList<>();
                     try {
-                        var fix = (com.bw.pdfixit.PdfaValidator.MetadataFix) get()[0];
+                        @SuppressWarnings("unchecked")
+                        var changes = (java.util.Map<String, Integer>) get()[0];
                         ValidationResult verification = (ValidationResult) get()[1];
                         result.setResult(verification);
                         reportedProxy = proxy;
                         reportedResult = verification;
-                        if (fix.applied()) {
-                            if (fix.fixes().isEmpty())
-                                actions.add(I18n.t("ui.fixer.fixed"));
-                            fix.fixes().forEach(f -> actions.add(I18n.t("ui.fixer.fix", f)));
-                        } else {
-                            // A failed attempt is listed like the others.
-                            actions.add(I18n.t("ui.fixer.notApplied", fix.status())
-                                    + (fix.status().contains("ID") ? I18n.t("ui.fixer.onlyRemovesId") : ""));
-                            fix.fixes().forEach(f -> actions.add(I18n.t("ui.fixer.fixNotApplied", f)));
-                        }
+                        changes.forEach((what, times) -> actions.add(what + (times > 1 ? " (" + times + "x)" : "")));
+                        if (changes.isEmpty())
+                            actions.add(I18n.t("ui.fixer.nothing"));
                     } catch (Exception ex) {
-                        Log.error("veraPDF fixer failed: %s", ex.getMessage());
-                        actions.add(I18n.t("ui.fixer.failed", ex.getMessage()));
+                        Log.error("PDF/A repair failed: %s", ex.getMessage());
+                        actions.add(I18n.t("ui.fixer.failed", ex.getCause() != null ? ex.getCause().getMessage() : ex.getMessage()));
                     }
                     onActions.accept(actions);
                     run.setText(I18n.t("ui.fixer.run"));
                     run.setEnabled(true);
+                    // Nothing left to repair: the button is no longer offered.
+                    if (result.getResult() == null || result.getResult().getState() != ValidationResult.State.NOT_CONFORM)
+                        run.getParent().setVisible(false);
                     // The dialog may need more room for the new result and the list.
                     Window window = SwingUtilities.getWindowAncestor(run);
                     if (window != null)
@@ -2397,42 +2413,28 @@ public class UI extends JSplitPane {
                     StringBuilder changes = new StringBuilder(I18n.t("ui.repair.wouldChange"));
                     check.repairs().forEach((what, times) ->
                             changes.append("&bull; ").append(escapeHtml(what)).append(" (").append(times).append("x)<br>"));
-                    changes.append(I18n.t("ui.repair.question"));
+                    changes.append("</html>");
+                    final JLabel changesLabel = new JLabel(changes.toString());
                     JPanel message = new JPanel(new BorderLayout(0, 8));
                     message.add(new JLabel(I18n.t("ui.repair.notConform")), BorderLayout.NORTH);
                     message.add(result, BorderLayout.CENTER);
-                    message.add(new JLabel(changes.toString()), BorderLayout.SOUTH);
-                    int answer = JOptionPane.showConfirmDialog(UI.this, message, I18n.t("common.pdfa"), JOptionPane.YES_NO_OPTION,
-                            JOptionPane.QUESTION_MESSAGE);
-                    if (answer == JOptionPane.YES_OPTION)
-                        repairPdfa(proxy);
+                    JPanel south = new JPanel(new BorderLayout(0, 8));
+                    south.add(changesLabel, BorderLayout.NORTH);
+                    // Like the dialogs of the standard switch and the verification: the repair is a button.
+                    south.add(createVeraPdfFixerRow(result, actions -> {
+                        StringBuilder done = new StringBuilder("<html>").append(I18n.t("ui.switch.changes"));
+                        actions.forEach(a -> done.append("&bull; ").append(escapeHtml(a)).append("<br>"));
+                        changesLabel.setText(done.append("</html>").toString());
+                    }), BorderLayout.SOUTH);
+                    message.add(south, BorderLayout.SOUTH);
+                    final String close = I18n.t("common.close");
+                    JOptionPane.showOptionDialog(UI.this, message, I18n.t("common.pdfa"), JOptionPane.DEFAULT_OPTION,
+                            JOptionPane.WARNING_MESSAGE, null, new Object[]{close}, close);
                 } catch (Exception e) {
                     Log.error("PDF/A validation failed: %s", e.getMessage());
                 }
             }
         }.execute();
-    }
-
-    /**
-     * Repairs what PDF/A forbids, then checks the document again.
-     */
-    private void repairPdfa(DocumentProxy proxy) {
-        runInBusy(() -> {
-            try {
-                var changes = proxy.fixPdfa();
-                runOnEdt(() -> {
-                    if (!changes.isEmpty())
-                        notifyPdfaFixes(changes);
-                    // Show what remains.
-                    reportedResult = ValidationResult.conform();
-                    reportPdfaViolations();
-                });
-            } catch (Exception e) {
-                Log.error("PDF/A: %s", e.getMessage());
-                runOnEdt(() -> toaster.toast(ToastType.ERROR, 20000,
-                        I18n.t("toast.notPossible"), e.getMessage()));
-            }
-        });
     }
 
     /**

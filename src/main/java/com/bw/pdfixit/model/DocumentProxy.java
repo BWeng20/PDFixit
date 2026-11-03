@@ -532,52 +532,39 @@ public class DocumentProxy {
      * @return What was changed and how often, empty if nothing.
      */
     public Map<String, Integer> fixPdfa() throws IOException {
-        ensuredDocument();
-        Map<String, Integer> changes = PdfStandard.fixPdfaIssues(document);
-        if (!changes.isEmpty()) {
-            modified = true;
-            redrawAllPages();
-        }
-        return changes;
+        return fixPdfa(false);
     }
 
     /**
-     * Runs the metadata fixer of veraPDF on the document, if it declares PDF/A. The fixed document replaces the
-     * current one, unless veraPDF could not repair it, see {@link com.bw.pdfixit.PdfaValidator.MetadataFix#applied}.
-     * The thumbnails are redrawn if the document was changed. The listeners are not told: the caller shows the result.
-     *
-     * @return What veraPDF did, the fixes are empty if it changed nothing.
+     * Checks if a repair could switch the standard of the document to PDF/A-3 to keep attachments, see
+     * {@link PdfStandard#hasAttachmentsBeforePdfa3}. The caller asks the user before it repairs with the switch.
      */
-    public com.bw.pdfixit.PdfaValidator.MetadataFix fixWithVeraPdf() throws IOException {
+    public boolean pdfaUpgradeOffered() {
         ensuredDocument();
-        Map<String, Integer> changes = new java.util.LinkedHashMap<>();
-        com.bw.pdfixit.PdfaValidator.MetadataFix fix = applyVeraPdfFixer(changes);
-        if (!changes.isEmpty()) {
+        return PdfStandard.hasAttachmentsBeforePdfa3(document);
+    }
+
+    /**
+     * Like {@link #fixPdfa()}.
+     *
+     * @param upgradeToPdfa3 True to declare PDF/A-3 for a PDF/A-1 or PDF/A-2 document with attachments, see
+     *                       {@link PdfStandard#repairPdfa(byte[], boolean)}. Only after the user agreed.
+     */
+    public Map<String, Integer> fixPdfa(boolean upgradeToPdfa3) throws IOException {
+        ensuredDocument();
+        PdfStandard.Repair repair = PdfStandard.repairPdfa(getBytes(), upgradeToPdfa3);
+        if (repair.pdf() != null) {
+            PDDocument fixed = Loader.loadPDF(repair.pdf());
+            PDDocument old;
+            synchronized (this) {
+                old = document;
+                document = fixed;
+            }
+            IOUtils.closeQuietly(old);
             modified = true;
             redrawAllPages();
         }
-        return fix;
-    }
-
-    private com.bw.pdfixit.PdfaValidator.MetadataFix applyVeraPdfFixer(Map<String, Integer> changes)
-            throws IOException {
-        if (PdfStandard.pdfaPart(document) == 0)
-            return new com.bw.pdfixit.PdfaValidator.MetadataFix(null, "The document declares no PDF/A", List.of());
-        com.bw.pdfixit.PdfaValidator.MetadataFix fix = com.bw.pdfixit.PdfaValidator.fixMetadata(getBytes());
-        Log.info("veraPDF metadata fixer: %s %s", fix.status(), fix.fixes());
-        if (fix.pdf() == null)
-            return fix;
-        PDDocument fixed = Loader.loadPDF(fix.pdf());
-        PDDocument old;
-        synchronized (this) {
-            old = document;
-            document = fixed;
-        }
-        IOUtils.closeQuietly(old);
-        fix.fixes().forEach(f -> changes.merge("veraPDF: " + f, 1, Integer::sum));
-        if (fix.fixes().isEmpty())
-            changes.merge(I18n.t("ui.fixer.fixed"), 1, Integer::sum);
-        return fix;
+        return repair.changes();
     }
 
     /**
@@ -588,7 +575,7 @@ public class DocumentProxy {
     public Map<String, Integer> previewPdfaRepair() throws IOException {
         ensuredDocument();
         PdfStandardProfile profile = PdfStandard.profile(document);
-        return profile == null || !profile.isPdfa() ? Map.of() : PdfStandard.preview(getBytes(), profile);
+        return profile == null || !profile.isPdfa() ? Map.of() : PdfStandard.repairPdfa(getBytes()).changes();
     }
 
     /**
@@ -670,6 +657,7 @@ public class DocumentProxy {
         synchronized (this) {
             for (Page p : pages) {
                 p.image = null;
+                p.error = null;
                 p.scale = 0;
             }
         }

@@ -322,16 +322,11 @@ public final class EInvoice {
      * @return The same array if nothing needs a change, otherwise the fixed PDF.
      */
     static byte[] fixPdfaIssues(byte[] pdf) throws IOException {
-        try (PDDocument document = Loader.loadPDF(pdf)) {
-            try {
-                if (PdfStandard.fixPdfaIssues(document).isEmpty())
-                    return pdf;
-            } catch (FontEmbedException e) {
-                throw new NotConformException(e.getMessage());
-            }
-            ByteArrayOutputStream os = new ByteArrayOutputStream(pdf.length + 1024);
-            document.save(os);
-            return os.toByteArray();
+        try {
+            byte[] fixed = PdfStandard.repairPdfa(pdf).pdf();
+            return fixed == null ? pdf : fixed;
+        } catch (FontEmbedException e) {
+            throw new NotConformException(e.getMessage());
         }
     }
 
