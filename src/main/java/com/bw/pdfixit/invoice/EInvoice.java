@@ -4,6 +4,8 @@ import com.bw.pdfixit.I18n;
 import com.bw.pdfixit.fonts.FontEmbedException;
 import com.bw.pdfixit.Log;
 import com.bw.pdfixit.PdfStandard;
+import com.bw.pdfixit.PdfStandardProfile;
+import com.bw.pdfixit.PdfTagger;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.cos.COSArray;
 import org.apache.pdfbox.cos.COSBase;
@@ -23,6 +25,7 @@ import org.apache.xmpbox.schema.XMPSchema;
 import org.apache.xmpbox.xml.DomXmpParser;
 import org.apache.xmpbox.xml.XmpSerializer;
 import org.mustangproject.ZUGFeRD.IZUGFeRDExporter;
+import org.mustangproject.ZUGFeRD.PDFAConformanceLevel;
 import org.mustangproject.ZUGFeRD.ZUGFeRDExporterFromA3;
 import org.mustangproject.ZUGFeRD.ZUGFeRDExporterFromPDFA;
 import org.mustangproject.ZUGFeRD.ZUGFeRDImporter;
@@ -63,6 +66,10 @@ public final class EInvoice {
     }
 
     private EInvoice() {
+    }
+
+    public static boolean needsConversion(PDDocument document) {
+        return document != null && PdfStandard.pdfaPart(document) != 3;
     }
 
     /**
@@ -278,13 +285,70 @@ public final class EInvoice {
      * @return The new PDF.
      */
     public static byte[] attachXml(byte[] pdf, byte[] xml) throws IOException {
+        return attachXml(pdf, xml, levelOf(pdf));
+    }
+
+    /**
+     * Like {@link #attachXml(byte[], byte[])}, the result declares the given PDF/A-3 level.
+     *
+     * @param level {@link PdfStandardProfile#PDFA_3A}, {@link PdfStandardProfile#PDFA_3B} or
+     *              {@link PdfStandardProfile#PDFA_3U}.
+     */
+    public static byte[] attachXml(byte[] pdf, byte[] xml, PdfStandardProfile level) throws IOException {
+        PDFAConformanceLevel conformance = conformance(level);
         pdf = addMissingResources(pdf);
         pdf = fixPdfaIssues(pdf);
+        if (level == PdfStandardProfile.PDFA_3A)
+            pdf = withStructure(pdf);
         try (IZUGFeRDExporter exporter = loadExporter(pdf)) {
+            // After load (which creates the inner exporter of the wrapper), before export (which writes the level).
+            exporter.setConformanceLevel(conformance);
             ByteArrayOutputStream os = new ByteArrayOutputStream(pdf.length + xml.length + 64 * 1024);
             exporter.setXML(xml);
             exporter.export(os);
             return os.toByteArray();
+        }
+    }
+
+    /**
+     * Level a needs a logical structure: a document without one gets the formal one of {@link PdfTagger}.
+     *
+     * @return The same array if the document has a structure, otherwise the tagged PDF.
+     */
+    private static byte[] withStructure(byte[] pdf) throws IOException {
+        try (PDDocument document = Loader.loadPDF(pdf)) {
+            if (PdfTagger.isTagged(document))
+                return pdf;
+            PdfTagger.tagPages(document);
+            ByteArrayOutputStream os = new ByteArrayOutputStream(pdf.length + 4096);
+            document.save(os);
+            return os.toByteArray();
+        }
+    }
+
+    private static PDFAConformanceLevel conformance(PdfStandardProfile level) {
+        if (level == PdfStandardProfile.PDFA_3A)
+            return PDFAConformanceLevel.ACCESSIBLE;
+        if (level == PdfStandardProfile.PDFA_3B)
+            return PDFAConformanceLevel.BASIC;
+        if (level == PdfStandardProfile.PDFA_3U)
+            return PDFAConformanceLevel.UNICODE;
+        throw new IllegalArgumentException("Not a PDF/A-3 level: " + level);
+    }
+
+    /**
+     * The PDF/A-3 level that keeps the conformance letter of the document, see {@link PdfStandard#pdfa3Level}.
+     */
+    public static PdfStandardProfile levelOf(PDDocument document) {
+        return PdfStandard.pdfa3Level(document);
+    }
+
+    /**
+     * The PDF/A-3 level that keeps the conformance letter of the document, see {@link PdfStandard#pdfa3Level}.
+     */
+    public static PdfStandardProfile levelOf(byte[] pdf) throws IOException {
+        try (PDDocument document = Loader.loadPDF(pdf)) {
+            return levelOf(document);
         }
     }
 
@@ -336,7 +400,16 @@ public final class EInvoice {
      * @throws NotConformException If the result is no valid ZUGFeRD/Factur-X document (e.g. the PDF is not PDF/A-3 conform).
      */
     public static byte[] attachXmlStrict(byte[] pdf, byte[] xml) throws IOException {
-        byte[] result = attachXml(pdf, xml);
+        return attachXmlStrict(pdf, xml, levelOf(pdf));
+    }
+
+    /**
+     * Like {@link #attachXml(byte[], byte[], PdfStandardProfile)}, but the result is validated.
+     *
+     * @throws NotConformException If the result is no valid ZUGFeRD/Factur-X document.
+     */
+    public static byte[] attachXmlStrict(byte[] pdf, byte[] xml, PdfStandardProfile level) throws IOException {
+        byte[] result = attachXml(pdf, xml, level);
         Validation v = validate(result, "result");
         if (!v.valid()) {
             // Same message may occur several times (e.g. for each page).

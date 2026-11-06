@@ -41,6 +41,30 @@ public final class AboutInfo {
             new Component("Tinos (font)", "1.23.0", APACHE, APACHE_URL),
             new Component("Cousine (font)", "1.23.0", APACHE, APACHE_URL));
 
+    /**
+     * Data of other publishers the tool contains.
+     *
+     * @param name      What it is.
+     * @param version   Version, may be empty.
+     * @param publisher Who publishes it (and maintains its content).
+     * @param url       Address of the source.
+     */
+    public record DataSource(String name, String version, String publisher, String url) {
+    }
+
+    /**
+     * The data the tool contains, see invoice-code-lists.properties and business-terms*.properties.
+     */
+    public static final List<DataSource> DATA = List.of(
+            new DataSource("EN 16931-1 business terms, descriptions and business rules", "DIN EN 16931-1:2020-12",
+                    "CEN and DIN, with their permission (see below)",
+                    "https://www.dinmedia.de/en/standard/din-en-16931-1/327729047"),
+            new DataSource("CII paths of the business terms (cii-xr.xsl)", "KoSIT xrechnung-visualization",
+                    "KoSIT, Apache License 2.0", "https://github.com/itplr-kosit/xrechnung-visualization"),
+            new DataSource("EN 16931 code lists", "18.0 (2026-11-15)",
+                    "European Commission; codes by ISO, UN/ECE, IANA and the European Commission",
+                    "https://ec.europa.eu/digital-building-blocks/sites/display/DIGITAL/Registry+of+supporting+artefacts+to+implement+EN16931"));
+
     private AboutInfo() {
     }
 
@@ -119,6 +143,9 @@ public final class AboutInfo {
         components().forEach(c -> sb.append("  ").append(c.name()).append(c.version().isEmpty() ? "" : " " + c.version())
                 .append(" - ").append(c.license()).append(c.licenseUrl() == null ? "" : " (" + c.licenseUrl() + ")")
                 .append('\n'));
+        sb.append("Data Sources:\n");
+        DATA.forEach(d -> sb.append("  ").append(d.name()).append(d.version().isEmpty() ? "" : " " + d.version())
+                .append(" - ").append(d.publisher()).append(" (").append(d.url()).append(")\n"));
         return sb.toString();
     }
 }

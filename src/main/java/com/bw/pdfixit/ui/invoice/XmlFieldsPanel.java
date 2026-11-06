@@ -1,18 +1,10 @@
 package com.bw.pdfixit.ui.invoice;
 
 import com.bw.pdfixit.I18n;
+import com.bw.pdfixit.invoice.BusinessTerms;
 import com.bw.pdfixit.invoice.InvoiceData;
 
-import javax.swing.BorderFactory;
-import javax.swing.JButton;
-import javax.swing.JLabel;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTable;
-import javax.swing.JTextField;
-import javax.swing.ListSelectionModel;
-import javax.swing.UIManager;
+import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.table.AbstractTableModel;
@@ -28,12 +20,14 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * All values of the invoice XML as a table: path, attributes and value. Values and attributes can be edited,
- * values can be removed. Used for data without a field in the editor.
+ * All values of the invoice XML as a table: business term of EN 16931, attributes and value. Values and attributes can be
+ * edited, values can be removed. Used for data without a field in the editor.<br>
+ * The path of a value is shown in the help area below the table; the term shows only the indices of the path
+ * (e.g. of the item), a value without business term its path.
  */
 class XmlFieldsPanel extends JPanel {
 
-    private static final int COL_PATH = 0;
+    private static final int COL_TERM = 0;
     private static final int COL_ATTRIBUTES = 1;
     private static final int COL_VALUE = 2;
 
@@ -49,6 +43,7 @@ class XmlFieldsPanel extends JPanel {
     private final JTable table = new JTable(model);
     private final JButton remove = new JButton(I18n.t("redact.remove"));
     private final JLabel count = new JLabel();
+    private final javax.swing.JEditorPane help = new javax.swing.JEditorPane();
 
     /**
      * The fields that match the filter.
@@ -74,33 +69,52 @@ class XmlFieldsPanel extends JPanel {
         table.setSurrendersFocusOnKeystroke(true);
         table.setFillsViewportHeight(true);
         table.getTableHeader().setReorderingAllowed(false);
-        table.getColumnModel().getColumn(COL_PATH).setCellRenderer(new DefaultTableCellRenderer() {
+        DefaultTableCellRenderer withToolTip = new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable t, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
                 super.getTableCellRendererComponent(t, value, isSelected, hasFocus, row, column);
-                setToolTipText(value == null ? null : value.toString().replace("/", " / "));
+                String help = helpToolTip(row);
+                setToolTipText(help != null ? help : row < visible.size() ? shortPath(visible.get(row)).replace("/", " / ") : null);
                 return this;
             }
-        });
+        };
+        table.getColumnModel().getColumn(COL_TERM).setCellRenderer(withToolTip);
         DefaultTableCellRenderer marking = new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable t, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
                 super.getTableCellRendererComponent(t, value, isSelected, hasFocus, row, column);
                 if (isModified(row, column))
                     setBorder(Outline.cellBorder(getBorder(), this));
+                setToolTipText(column == COL_VALUE ? helpToolTip(row) : null);
                 return this;
             }
         };
         table.getColumnModel().getColumn(COL_ATTRIBUTES).setCellRenderer(marking);
         table.getColumnModel().getColumn(COL_VALUE).setCellRenderer(marking);
         int em = table.getFontMetrics(table.getFont()).charWidth('m');
-        table.getColumnModel().getColumn(COL_PATH).setPreferredWidth(34 * em);
+        table.getColumnModel().getColumn(COL_TERM).setPreferredWidth(34 * em);
         table.getColumnModel().getColumn(COL_ATTRIBUTES).setPreferredWidth(9 * em);
-        table.getColumnModel().getColumn(COL_VALUE).setPreferredWidth(16 * em);
-        table.getSelectionModel().addListSelectionListener(e -> updateRemove());
+        table.getColumnModel().getColumn(COL_VALUE).setPreferredWidth(20 * em);
+        table.getSelectionModel().addListSelectionListener(e -> {
+            updateRemove();
+            if (!e.getValueIsAdjusting())
+                updateHelp();
+        });
 
         JScrollPane scroll = new JScrollPane(table);
-        scroll.setPreferredSize(new Dimension(59 * em, table.getRowHeight() * 9 + table.getTableHeader().getPreferredSize().height));
+        scroll.setPreferredSize(new Dimension(InvoiceEditor.TABLE_WIDTH_IN_EM * em, table.getRowHeight() * 9 + table.getTableHeader().getPreferredSize().height));
+
+        // The description of the selected value from the specification.
+        help.setContentType("text/html");
+        help.setEditable(false);
+        help.putClientProperty(javax.swing.JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
+        help.setFont(UIManager.getFont("Label.font"));
+        JScrollPane helpScroll = new JScrollPane(help);
+        helpScroll.setPreferredSize(new Dimension(InvoiceEditor.TABLE_WIDTH_IN_EM * em, table.getRowHeight() * 6));
+        javax.swing.JSplitPane split = new javax.swing.JSplitPane(javax.swing.JSplitPane.VERTICAL_SPLIT, scroll, helpScroll);
+        split.setResizeWeight(0.6);
+        split.setBorder(null);
+        updateHelp();
 
         filter.putClientProperty("JTextField.placeholderText", I18n.t("xml.filter"));
         filter.putClientProperty("JTextField.showClearButton", Boolean.TRUE);
@@ -125,12 +139,13 @@ class XmlFieldsPanel extends JPanel {
         remove.setToolTipText(I18n.t("xml.remove.tip"));
         remove.addActionListener(e -> removeSelected());
 
-        JLabel hint = new JLabel(I18n.t("xml.hint"));
+        // One line per sentence: a long line would make the whole editor wide.
+        JLabel hint = new JLabel("<html>" + TermHelp.escape(I18n.t("xml.hint")).replace(". ", ".<br>") + "</html>");
         hint.setForeground(UIManager.getColor("Label.disabledForeground"));
         count.setForeground(UIManager.getColor("Label.disabledForeground"));
 
-        JPanel top = new JPanel(new BorderLayout(8, 0));
-        top.add(filter, BorderLayout.WEST);
+        JPanel top = new JPanel(new BorderLayout(0, 4));
+        top.add(filter, BorderLayout.NORTH);
         top.add(hint, BorderLayout.CENTER);
         JPanel bottom = new JPanel(new BorderLayout());
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEADING, 0, 0));
@@ -139,9 +154,34 @@ class XmlFieldsPanel extends JPanel {
         bottom.add(count, BorderLayout.EAST);
 
         add(top, BorderLayout.NORTH);
-        add(scroll, BorderLayout.CENTER);
+        add(split, BorderLayout.CENTER);
         add(bottom, BorderLayout.SOUTH);
         updateRemove();
+    }
+
+    /**
+     * The short help of the business terms of a row as tool tip, null if there is none.
+     */
+    private String helpToolTip(int row) {
+        return row < 0 || row >= visible.size() ? null : TermHelp.tooltip(BusinessTerms.helpOfPath(visible.get(row).path()));
+    }
+
+    /**
+     * Shows the description of the selected value in the help area.
+     */
+    private void updateHelp() {
+        int[] rows = table.getSelectedRows();
+        String page;
+        if (rows.length == 1 && rows[0] < visible.size()) {
+            InvoiceData.XmlField f = visible.get(rows[0]);
+            // The path in front of the help: it is no column of the table.
+            page = TermHelp.page(BusinessTerms.helpOfPath(f.path())).replaceFirst("<body>",
+                    java.util.regex.Matcher.quoteReplacement("<body><p><i>" + TermHelp.escape(I18n.t("xml.col.path"))
+                            + ":</i>&nbsp;&nbsp;" + TermHelp.escape(f.path().replace("/", " / ")) + "</p>"));
+        } else
+            page = "<html><body><p>" + TermHelp.escape(I18n.t("help.select")) + "</p></body></html>";
+        help.setText(page);
+        help.setCaretPosition(0);
     }
 
     /**
@@ -154,7 +194,7 @@ class XmlFieldsPanel extends JPanel {
     }
 
     private boolean isModified(int row, int column) {
-        if (original == null || row < 0 || row >= visible.size() || column == COL_PATH)
+        if (original == null || row < 0 || row >= visible.size() || column == COL_TERM)
             return false;
         InvoiceData.XmlField f = visible.get(row);
         String[] o = original.get(f.path());
@@ -178,7 +218,7 @@ class XmlFieldsPanel extends JPanel {
         visible = new ArrayList<>();
         for (InvoiceData.XmlField x : all)
             if (f.isEmpty() || x.path().toLowerCase(Locale.ROOT).contains(f)
-                    || x.value().toLowerCase(Locale.ROOT).contains(f))
+                    || x.value().toLowerCase(Locale.ROOT).contains(f) || termMatches(x, f))
                 visible.add(x);
         model.fireTableDataChanged();
         for (int i = 0; i < visible.size(); ++i)
@@ -186,6 +226,29 @@ class XmlFieldsPanel extends JPanel {
                 table.addRowSelectionInterval(i, i);
         count.setText(visible.size() == all.size() ? I18n.t("xml.count.all", all.size()) : I18n.t("xml.count.some", visible.size(), all.size()));
         updateRemove();
+    }
+
+    private static String shortPath(InvoiceData.XmlField f) {
+        return f.path().startsWith(COMMON_PREFIX) ? f.path().substring(COMMON_PREFIX.length()) : f.path();
+    }
+
+    /**
+     * The business term with the indices of the path, e.g. "BT-153 Item name [2]" for the second item.
+     * A value without business term shows its path.
+     */
+    static String termText(String path, String term) {
+        if (term == null)
+            return path.startsWith(COMMON_PREFIX) ? path.substring(COMMON_PREFIX.length()) : path;
+        List<String> indices = new ArrayList<>();
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\[(\\d+)]").matcher(path);
+        while (m.find())
+            indices.add(m.group(1));
+        return indices.isEmpty() ? term : term + " [" + String.join(", ", indices) + "]";
+    }
+
+    private static boolean termMatches(InvoiceData.XmlField x, String filter) {
+        String term = BusinessTerms.of(x.path());
+        return term != null && term.toLowerCase(Locale.ROOT).contains(filter);
     }
 
     private void updateRemove() {
@@ -213,7 +276,7 @@ class XmlFieldsPanel extends JPanel {
     }
 
     private class FieldModel extends AbstractTableModel {
-        private final String[] names = {I18n.t("xml.col.path"), I18n.t("xml.col.attributes"), I18n.t("xml.col.value")};
+        private final String[] names = {I18n.t("xml.col.term"), I18n.t("xml.col.attributes"), I18n.t("xml.col.value")};
 
         @Override
         public int getRowCount() {
@@ -232,14 +295,14 @@ class XmlFieldsPanel extends JPanel {
 
         @Override
         public boolean isCellEditable(int row, int column) {
-            return column != COL_PATH;
+            return column == COL_ATTRIBUTES || column == COL_VALUE;
         }
 
         @Override
         public Object getValueAt(int row, int column) {
             InvoiceData.XmlField f = visible.get(row);
             return switch (column) {
-                case COL_PATH -> f.path().startsWith(COMMON_PREFIX) ? f.path().substring(COMMON_PREFIX.length()) : f.path();
+                case COL_TERM -> termText(f.path(), BusinessTerms.of(f.path()));
                 case COL_ATTRIBUTES -> f.attributes();
                 default -> f.value();
             };

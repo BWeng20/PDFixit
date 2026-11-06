@@ -1,12 +1,15 @@
 package com.bw.pdfixit;
 
 import org.apache.pdfbox.cos.COSArray;
+import org.apache.pdfbox.cos.COSBase;
 import org.apache.pdfbox.cos.COSDictionary;
 import org.apache.pdfbox.cos.COSInteger;
 import org.apache.pdfbox.cos.COSName;
+import org.apache.pdfbox.cos.COSStream;
 import org.apache.pdfbox.cos.COSString;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDResources;
 import org.apache.pdfbox.pdmodel.common.PDStream;
 import org.apache.pdfbox.pdmodel.documentinterchange.logicalstructure.PDMarkInfo;
 import org.apache.pdfbox.pdmodel.documentinterchange.logicalstructure.PDStructureTreeRoot;
@@ -16,6 +19,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * Gives a document a <b>formal</b> logical structure, which the conformance level A of PDF/A demands.<br>
@@ -95,6 +101,64 @@ public final class PdfTagger {
         mark.setMarked(true);
         catalog.setMarkInfo(mark);
         return number;
+    }
+
+    /**
+     * Removes the logical structure: the structure tree, the mark information, the {@code StructParents} entry of
+     * every page, the {@code StructParent(s)} entries of annotations and of XObjects (also nested in forms).<br>
+     * The marked-content sequences in the content streams stay; without the tree they mean nothing.
+     * Used for templates: the content drawn on top of them is not part of their tree, and a copied page would carry
+     * the same {@code StructParents} entry as its original.
+     *
+     * @return The number of entries removed, 0 if the document had no structure.
+     */
+    public static int removeTags(PDDocument document) throws IOException {
+        int removed = 0;
+        COSDictionary catalog = document.getDocumentCatalog().getCOSObject();
+        for (COSName key : List.of(COSName.STRUCT_TREE_ROOT, COSName.MARK_INFO))
+            if (catalog.containsKey(key)) {
+                catalog.removeItem(key);
+                ++removed;
+            }
+        Set<COSBase> seen = new HashSet<>();
+        for (PDPage page : document.getPages()) {
+            if (page.getCOSObject().containsKey(COSName.STRUCT_PARENTS)) {
+                page.getCOSObject().removeItem(COSName.STRUCT_PARENTS);
+                ++removed;
+            }
+            for (var annotation : page.getAnnotations())
+                if (annotation.getCOSObject().containsKey(COSName.STRUCT_PARENT)) {
+                    annotation.getCOSObject().removeItem(COSName.STRUCT_PARENT);
+                    ++removed;
+                }
+            removed += removeXObjectParents(page.getResources(), seen);
+        }
+        return removed;
+    }
+
+    private static int removeXObjectParents(PDResources resources, Set<COSBase> seen) {
+        if (resources == null)
+            return 0;
+        COSDictionary xobjects = resources.getCOSObject().getCOSDictionary(COSName.XOBJECT);
+        if (xobjects == null)
+            return 0;
+        int removed = 0;
+        for (COSName name : xobjects.keySet()) {
+            // Shared XObjects are visited once, that also ends cycles.
+            if (!(xobjects.getDictionaryObject(name) instanceof COSStream stream) || !seen.add(stream))
+                continue;
+            for (COSName key : List.of(COSName.STRUCT_PARENT, COSName.STRUCT_PARENTS))
+                if (stream.containsKey(key)) {
+                    stream.removeItem(key);
+                    ++removed;
+                }
+            if (COSName.FORM.equals(stream.getCOSName(COSName.SUBTYPE))) {
+                COSDictionary inner = stream.getCOSDictionary(COSName.RESOURCES);
+                if (inner != null)
+                    removed += removeXObjectParents(new PDResources(inner), seen);
+            }
+        }
+        return removed;
     }
 
     private static byte[] content(PDPage page) throws IOException {

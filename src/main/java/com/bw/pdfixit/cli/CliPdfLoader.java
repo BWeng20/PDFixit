@@ -6,7 +6,7 @@ import com.bw.pdfixit.PdfRisk;
 import com.bw.pdfixit.model.DocumentProxy;
 import com.bw.pdfixit.model.MergeOptions;
 import com.bw.pdfixit.model.PdfLoadWorker;
-import org.apache.pdfbox.Loader;
+import com.bw.pdfixit.model.PdfLoader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 
@@ -39,9 +39,7 @@ public class CliPdfLoader implements PdfLoadWorker {
         PDDocument document = null;
         try {
             byte[] data = Files.readAllBytes(file);
-            document = ownerPassword != null
-                    ? Loader.loadPDF(data, ownerPassword)
-                    : Loader.loadPDF(data);
+            document = PdfLoader.load(data, ownerPassword);
             documentProxy.error = null;
             documentProxy.reportRisks(file.getFileName().toString(), PdfRisk.inspect(document, data));
         } catch (InvalidPasswordException ep) {

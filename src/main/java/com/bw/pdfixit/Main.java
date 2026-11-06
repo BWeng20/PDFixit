@@ -3,6 +3,7 @@ package com.bw.pdfixit;
 import com.bw.pdfixit.I18n;
 import com.bw.pdfixit.invoice.EInvoice;
 import com.bw.pdfixit.cli.CommandExecuter;
+import com.bw.pdfixit.cli.InvoiceGeneration;
 import com.bw.pdfixit.model.MergeOptions;
 import com.bw.pdfixit.ui.UI;
 import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
@@ -94,6 +95,9 @@ public class Main implements Callable<Integer> {
     @Option(names = {"-ei", "--extractInvoice"}, paramLabel = "<xml file>", descriptionKey = "cli.extractInvoice")
     private String extractInvoice = null;
 
+    @Option(names = {"-ex", "--extractXmp"}, paramLabel = "<xmp file>", descriptionKey = "cli.extractXmp")
+    private String extractXmp = null;
+
     @Option(names = {"-ri", "--removeInvoice"}, descriptionKey = "cli.removeInvoice")
     private boolean removeInvoice = false;
 
@@ -102,6 +106,24 @@ public class Main implements Callable<Integer> {
 
     @Option(names = {"-vp", "--validatePdfa"}, descriptionKey = "cli.validatePdfa")
     private boolean validatePdfa = false;
+
+    @Option(names = {"-gi", "--generateInvoice"}, paramLabel = "<xml file>", descriptionKey = "cli.generateInvoice")
+    private String generateInvoice = null;
+
+    @Option(names = {"-tp", "--template"}, paramLabel = "<pdf file>", descriptionKey = "cli.template")
+    private String template = null;
+
+    @Option(names = {"-ly", "--layout"}, paramLabel = "<json file>", descriptionKey = "cli.layout")
+    private String layout = null;
+
+    @Option(names = {"-co", "--continuation"}, paramLabel = "<template|page1|blank|pdf file>", descriptionKey = "cli.continuation")
+    private String continuation = null;
+
+    @Option(names = {"-pl", "--pdfaLevel"}, paramLabel = "<a|b|u>", descriptionKey = "cli.pdfaLevel")
+    private String pdfaLevel = null;
+
+    @Option(names = {"-lg", "--language"}, paramLabel = "<de|en>", descriptionKey = "cli.language")
+    private String language = null;
 
     @Option(names = {"--debug"}, descriptionKey = "cli.debug")
     private boolean debug = false;
@@ -128,6 +150,18 @@ public class Main implements Callable<Integer> {
 
         if (attachInvoice != null && !Files.exists(Paths.get(attachInvoice))) {
             System.err.println(I18n.t("cli.fileMissing", attachInvoice));
+            return 10;
+        }
+
+        for (String f : new String[]{generateInvoice, template, layout}) {
+            if (f != null && !Files.exists(Paths.get(f))) {
+                System.err.println(I18n.t("cli.fileMissing", f));
+                return 10;
+            }
+        }
+
+        if (continuation != null && continuation.toLowerCase().endsWith(".pdf") && !Files.exists(Paths.get(continuation))) {
+            System.err.println(I18n.t("cli.fileMissing", continuation));
             return 10;
         }
 
@@ -200,6 +234,10 @@ public class Main implements Callable<Integer> {
      */
     protected int executeCommands() {
 
+        if (generateInvoice != null || template != null || layout != null || continuation != null
+                || pdfaLevel != null || language != null)
+            return generateInvoice();
+
         if (files.isEmpty()) {
             System.err.println(I18n.t("cli.noFiles"));
             usage(System.err);
@@ -268,6 +306,15 @@ public class Main implements Callable<Integer> {
                 else {
                     System.err.println(I18n.t("cli.noInvoiceErr"));
                     return 8;
+                }
+            }
+
+            if (extractXmp != null) {
+                if (executer.extractXmp(Paths.get(extractXmp)))
+                    System.out.println(I18n.t("cli.xmpStored", extractXmp));
+                else {
+                    System.err.println(I18n.t("cli.noXmpErr"));
+                    return 16;
                 }
             }
 
@@ -364,6 +411,48 @@ public class Main implements Callable<Integer> {
             executer.close();
         }
         return 0;
+    }
+
+    /**
+     * Generates an invoice from an XML file on a template, see {@link InvoiceGeneration}.
+     */
+    private int generateInvoice() {
+        final java.util.Set<String> allowed = java.util.Set.of("--generateInvoice", "--template", "--layout",
+                "--continuation", "--pdfaLevel", "--language", "--out", "--debug");
+        boolean others = spec.commandLine().getParseResult().matchedOptions().stream()
+                .anyMatch(o -> !allowed.contains(o.longestName()));
+        if (generateInvoice == null) {
+            System.err.println(I18n.t("cli.generate.noXml"));
+            usage(System.err);
+            return InvoiceGeneration.EXIT_ARGUMENTS;
+        }
+        if (template == null) {
+            System.err.println(I18n.t("cli.generate.noTemplate"));
+            usage(System.err);
+            return InvoiceGeneration.EXIT_ARGUMENTS;
+        }
+        if (others || fileArguments != null) {
+            System.err.println(I18n.t("cli.generate.combination"));
+            usage(System.err);
+            return InvoiceGeneration.EXIT_ARGUMENTS;
+        }
+        if (outfile == null) {
+            System.err.println(I18n.t("cli.noOutput"));
+            usage(System.err);
+            return 3;
+        }
+        try {
+            return InvoiceGeneration.generate(Paths.get(generateInvoice), Paths.get(template),
+                    layout == null ? null : Paths.get(layout), continuation,
+                    InvoiceGeneration.parseLevel(pdfaLevel), InvoiceGeneration.parseLanguage(language), outfile);
+        } catch (IllegalArgumentException e) {
+            System.err.println(e.getMessage());
+            usage(System.err);
+            return InvoiceGeneration.EXIT_ARGUMENTS;
+        } catch (Exception e) {
+            Log.exception(e);
+            return 1;
+        }
     }
 
     /**

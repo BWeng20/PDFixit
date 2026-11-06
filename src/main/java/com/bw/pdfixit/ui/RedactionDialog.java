@@ -10,26 +10,9 @@ import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.rendering.PDFRenderer;
 
 import javax.swing.*;
-import java.awt.AlphaComposite;
-import java.awt.BasicStroke;
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Component;
-import java.awt.Cursor;
-import java.awt.Dialog;
-import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Graphics;
-import java.awt.Graphics2D;
-import java.awt.Point;
-import java.awt.RenderingHints;
-import java.awt.Window;
-import java.awt.event.ActionEvent;
+import java.awt.*;
 import java.awt.event.KeyEvent;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.awt.geom.Point2D;
-import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
@@ -38,12 +21,23 @@ import java.util.regex.PatternSyntaxException;
 
 /**
  * Dialog to select the areas of a page that shall be permanently removed.<br>
- * Areas are drawn with the mouse or found by a text search.
+ * Areas are drawn with the mouse or found by a text search. The page can be zoomed, changes of the areas can be undone.
  * Nothing is changed in the document, the dialog only returns the selected regions.
  */
 public final class RedactionDialog extends JDialog {
 
+    /**
+     * Resolution of the first picture of the page, it is shown fitted to the window.
+     */
     private static final int PREVIEW_DPI = 100;
+    /**
+     * A picture of more pixels is not rendered: the biggest zoom steps are not offered for a big page.
+     */
+    private static final long MAX_PIXELS = 40_000_000L;
+    /**
+     * Changes that can be undone.
+     */
+    private static final int MAX_UNDO = 100;
 
     private final PDDocument document;
     private final int pageNb;
@@ -59,11 +53,40 @@ public final class RedactionDialog extends JDialog {
     private final AreaCanvas canvas = new AreaCanvas();
     private final JTextField searchField = new JTextField(20);
     private final JCheckBox allPages = new JCheckBox(I18n.t("redact.allPages"));
+    private final JCheckBox antialiasing = new JCheckBox(I18n.t("redact.aa"));
     private final JLabel info = new JLabel();
     private final JButton colorButton = new JButton(I18n.t("redact.color"));
     private final JButton removeButton = new JButton(I18n.t("redact.remove"));
     private final JButton resetButton = new JButton(I18n.t("redact.reset"));
     private final JButton applyButton = new JButton(I18n.t("ui.redact"));
+    private final JButton undoButton = new JButton(I18n.t("redact.undo"));
+    private final JButton zoomFitButton = new JButton(I18n.t("zoom.fit"));
+    private final JButton zoomOutButton = new JButton("\u2212");
+    private final JButton zoomInButton = new JButton("+");
+    private final JLabel zoomLabel = new JLabel(" ");
+    private final JScrollPane scroll = new JScrollPane(canvas);
+
+    /**
+     * Size of the displayed page (rotated) in points.
+     */
+    private final double pageWidth;
+    private final double pageHeight;
+    /**
+     * The zoom in percent, 0 if the page is fitted to the window.
+     */
+    private int zoom;
+    /**
+     * Resolution of the picture of the canvas.
+     */
+    private double imageDpi = PREVIEW_DPI;
+    /**
+     * Counts the requests to render the page again, an older result is dropped.
+     */
+    private int renderRequest;
+    /**
+     * The areas before each change, the last one first at the end.
+     */
+    private final List<List<Redactor.Region>> undoStack = new ArrayList<>();
 
     private RedactionDialog(Window owner, PDDocument document, int pageNb) throws java.io.IOException {
         super(owner, I18n.t("redact.title", pageNb), Dialog.ModalityType.APPLICATION_MODAL);
@@ -76,18 +99,23 @@ public final class RedactionDialog extends JDialog {
 
         // The viewer shows the page as it is displayed, i.e. rotated.
         BufferedImage image = new PDFRenderer(document).renderImageWithDPI(pageNb - 1, PREVIEW_DPI);
+        this.pageWidth = image.getWidth() * 72.0 / PREVIEW_DPI;
+        this.pageHeight = image.getHeight() * 72.0 / PREVIEW_DPI;
         canvas.setImage(image, PREVIEW_DPI / 72.0);
         canvas.setColor(Preferences.getInstance().getRedactionColor());
-        canvas.setPreferredSize(new Dimension(
-                Math.min(image.getWidth(), 700) + 10, Math.min(image.getHeight(), 800) + 10));
-        canvas.setAreaListener(new AreaListener() {
+        canvas.setAntialiasing(Preferences.getInstance().isRedactionAntialiasing());
+        // Not higher than the screen can show: the window has to fit (the page scrolls or is fitted).
+        Rectangle usable = GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
+        scroll.setPreferredSize(new Dimension(
+                Math.min(image.getWidth(), 700) + 10, Math.min(image.getHeight(), usable.height * 65 / 100) + 10));
+        canvas.setAreaListener(new AreaCanvas.AreaListener() {
             @Override
-            public void added(Rectangle2D area) {
+            public void added(ViewArea area) {
                 addViewArea(area);
             }
 
             @Override
-            public void changed(int index, Rectangle2D area) {
+            public void changed(int index, ViewArea area) {
                 changeViewArea(index, area);
             }
 
@@ -104,7 +132,13 @@ public final class RedactionDialog extends JDialog {
 
         setContentPane(createContent());
         updateState();
+        updateZoom();
         pack();
+        // All the controls must be on the screen, also on a small one.
+        Dimension size = getSize();
+        setSize(Math.min(size.width, usable.width), Math.min(size.height, usable.height));
+        Dimension min = getMinimumSize();
+        setMinimumSize(new Dimension(Math.min(min.width, usable.width), Math.min(min.height, usable.height)));
         setLocationRelativeTo(owner);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
     }
@@ -116,15 +150,55 @@ public final class RedactionDialog extends JDialog {
         JLabel hint = new JLabel(I18n.t("redact.hint"), SwingConstants.CENTER);
         hint.setIconTextGap(0);
         // Help button in the upper right corner, like in the main window.
-        JButton help = new JButton(javax.swing.UIManager.getIcon("OptionPane.questionIcon"));
+        RoundSvgButton help = RoundSvgButton.createHelp();
         help.setToolTipText(I18n.t("redact.help.tip"));
         help.addActionListener(e -> showHelp());
 
-        JPanel north = new JPanel(new BorderLayout(0,0));
+        JPanel north = new JPanel(new BorderLayout(0, 0));
         north.add(hint, BorderLayout.CENTER);
         north.add(help, BorderLayout.EAST);
-        main.add(north, BorderLayout.NORTH);
-        main.add(canvas, BorderLayout.CENTER);
+
+        // The zoom: fit the page to the window, or a step. Ctrl and the mouse wheel zoom too.
+        zoomFitButton.setToolTipText(I18n.t("zoom.fit.tip"));
+        zoomFitButton.addActionListener(e -> setZoom(0, null));
+        zoomOutButton.setToolTipText(I18n.t("zoom.out.tip"));
+        zoomOutButton.addActionListener(e -> setZoom(nextZoom(false), null));
+        zoomInButton.setToolTipText(I18n.t("zoom.in.tip"));
+        zoomInButton.addActionListener(e -> setZoom(nextZoom(true), null));
+        Insets small = new Insets(2, 10, 2, 10);
+        zoomOutButton.setMargin(small);
+        zoomInButton.setMargin(small);
+        JPanel zoomRow = new JPanel(new FlowLayout(FlowLayout.LEADING, 4, 0));
+        zoomRow.add(zoomFitButton);
+        zoomRow.add(zoomOutButton);
+        zoomRow.add(zoomInButton);
+        zoomRow.add(zoomLabel);
+        JPanel top = new JPanel(new BorderLayout(0, 4));
+        top.add(north, BorderLayout.NORTH);
+        top.add(zoomRow, BorderLayout.SOUTH);
+        main.add(top, BorderLayout.NORTH);
+
+        // The wheel scrolls, with Ctrl it zooms around the mouse.
+        scroll.setWheelScrollingEnabled(false);
+        scroll.addMouseWheelListener(e -> {
+            if (e.isControlDown()) {
+                int target = nextZoom(e.getWheelRotation() < 0);
+                if (target != zoom)
+                    setZoom(target, SwingUtilities.convertPoint(e.getComponent(), e.getPoint(), scroll.getViewport()));
+            } else {
+                JScrollBar bar = e.isShiftDown() ? scroll.getHorizontalScrollBar() : scroll.getVerticalScrollBar();
+                bar.setValue(bar.getValue() + e.getUnitsToScroll() * 24);
+            }
+        });
+        // The fitted page changes with the window: so does the percent that is shown.
+        canvas.addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentResized(java.awt.event.ComponentEvent e) {
+                if (zoom == 0)
+                    updateZoom();
+            }
+        });
+        main.add(scroll, BorderLayout.CENTER);
 
         JPanel south = new JPanel(new BorderLayout(0, 5));
 
@@ -142,6 +216,12 @@ public final class RedactionDialog extends JDialog {
         search.add(searchButton);
         south.add(search, BorderLayout.NORTH);
 
+        antialiasing.setToolTipText(I18n.t("redact.aa.tip"));
+        antialiasing.setSelected(Preferences.getInstance().isRedactionAntialiasing());
+        antialiasing.addActionListener(e -> {
+            Preferences.getInstance().setRedactionAntialiasing(antialiasing.isSelected());
+            canvas.setAntialiasing(antialiasing.isSelected());
+        });
         colorButton.setToolTipText(I18n.t("redact.color.tip"));
         colorButton.addActionListener(e -> {
             if (chooseColor(this))
@@ -154,8 +234,17 @@ public final class RedactionDialog extends JDialog {
             if (selected >= 0)
                 removeViewArea(selected);
         });
+        undoButton.setToolTipText(I18n.t("redact.undo.tip"));
+        undoButton.setEnabled(false);
+        undoButton.addActionListener(e -> undo());
+        getRootPane().registerKeyboardAction(e -> undo(),
+                KeyStroke.getKeyStroke(KeyEvent.VK_Z, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()),
+                JComponent.WHEN_IN_FOCUSED_WINDOW);
+        resetButton.setToolTipText(I18n.t("redact.reset.tip"));
         resetButton.addActionListener(e -> {
-            regions.clear();
+            rememberForUndo();
+            // Only the areas of this page: the ones on other pages (e.g. from a search in all pages) are kept.
+            regions.removeIf(r -> r.pageNb == pageNb);
             canvas.select(-1);
             updateState();
         });
@@ -165,14 +254,23 @@ public final class RedactionDialog extends JDialog {
         });
         JButton cancel = new JButton(I18n.t("common.cancel"));
         cancel.addActionListener(e -> dispose());
+        // The main action of the dialog.
+        UI.setPrimary(applyButton);
 
-        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.TRAILING));
-        buttons.add(info);
-        buttons.add(colorButton);
-        buttons.add(removeButton);
-        buttons.add(resetButton);
-        buttons.add(applyButton);
-        buttons.add(cancel);
+        // The settings left, what is done with the areas right, the main action last.
+        JPanel settings = new JPanel(new FlowLayout(FlowLayout.LEADING));
+        settings.add(info);
+        settings.add(antialiasing);
+        settings.add(colorButton);
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.TRAILING));
+        actions.add(undoButton);
+        actions.add(removeButton);
+        actions.add(resetButton);
+        actions.add(cancel);
+        actions.add(applyButton);
+        JPanel buttons = new JPanel(new BorderLayout());
+        buttons.add(settings, BorderLayout.WEST);
+        buttons.add(actions, BorderLayout.EAST);
         south.add(buttons, BorderLayout.SOUTH);
 
         main.add(south, BorderLayout.SOUTH);
@@ -181,24 +279,50 @@ public final class RedactionDialog extends JDialog {
     }
 
     private void showHelp() {
-        JOptionPane.showMessageDialog(this,
-                I18n.t("redact.help.text"),
-                I18n.t("common.help"), JOptionPane.INFORMATION_MESSAGE);
+        HelpDialog.show(this, "redact.help.text", true);
     }
 
-    private void addViewArea(Rectangle2D viewArea) {
-        regions.add(new Redactor.Region(pageNb, Redactor.viewToPage(viewArea, cropBox, rotation)));
+    private Redactor.Region toRegion(ViewArea viewArea) {
+        // The angle is the same on the displayed and on the unrotated page, see Redactor.viewToPage.
+        return new Redactor.Region(pageNb, Redactor.viewToPage(viewArea.rect(), cropBox, rotation), viewArea.angle());
+    }
+
+    /**
+     * Remembers the areas before a change.
+     */
+    private void rememberForUndo() {
+        undoStack.add(new ArrayList<>(regions));
+        if (undoStack.size() > MAX_UNDO)
+            undoStack.remove(0);
+    }
+
+    /**
+     * Takes back the last change of the areas.
+     */
+    private void undo() {
+        if (undoStack.isEmpty())
+            return;
+        regions.clear();
+        regions.addAll(undoStack.remove(undoStack.size() - 1));
+        canvas.select(-1);
+        updateState();
+    }
+
+    private void addViewArea(ViewArea viewArea) {
+        rememberForUndo();
+        regions.add(toRegion(viewArea));
         updateState();
         canvas.select(canvas.getAreaCount() - 1);
     }
 
-    private void changeViewArea(int canvasIndex, Rectangle2D viewArea) {
-        regions.set(regionIndexOnPage.get(canvasIndex),
-                new Redactor.Region(pageNb, Redactor.viewToPage(viewArea, cropBox, rotation)));
+    private void changeViewArea(int canvasIndex, ViewArea viewArea) {
+        rememberForUndo();
+        regions.set(regionIndexOnPage.get(canvasIndex), toRegion(viewArea));
         updateState();
     }
 
     private void removeViewArea(int canvasIndex) {
+        rememberForUndo();
         regions.remove((int) regionIndexOnPage.get(canvasIndex));
         canvas.select(-1);
         updateState();
@@ -209,16 +333,24 @@ public final class RedactionDialog extends JDialog {
         if (text.isEmpty())
             return;
         try {
-            List<Redactor.Region> found = Redactor.findText(document, Pattern.compile(text));
-            String warning = Redactor.textSearchWarning(Redactor.pagesWithoutText(document));
+            List<Redactor.Region> found;
+            String warning;
+            // Not while the page is rendered again: the document is read by one thread at a time.
+            synchronized (document) {
+                found = Redactor.findText(document, Pattern.compile(text));
+                warning = Redactor.textSearchWarning(Redactor.pagesWithoutText(document));
+            }
             if (warning != null)
                 JOptionPane.showMessageDialog(this, warning, I18n.t("redact.find"), JOptionPane.WARNING_MESSAGE);
-            int added = 0;
+            List<Redactor.Region> matches = new ArrayList<>();
             for (Redactor.Region r : found) {
-                if (allPages.isSelected() || r.pageNb == pageNb) {
-                    regions.add(r);
-                    ++added;
-                }
+                if (allPages.isSelected() || r.pageNb == pageNb)
+                    matches.add(r);
+            }
+            int added = matches.size();
+            if (added > 0) {
+                rememberForUndo();
+                regions.addAll(matches);
             }
             updateState();
             if (added == 0) {
@@ -238,12 +370,12 @@ public final class RedactionDialog extends JDialog {
     private final List<Integer> regionIndexOnPage = new ArrayList<>();
 
     private void updateState() {
-        List<Rectangle2D> onPage = new ArrayList<>();
+        List<ViewArea> onPage = new ArrayList<>();
         regionIndexOnPage.clear();
         for (int i = 0; i < regions.size(); ++i) {
             Redactor.Region r = regions.get(i);
             if (r.pageNb == pageNb) {
-                onPage.add(Redactor.pageToView(r.area, cropBox, rotation));
+                onPage.add(new ViewArea(Redactor.pageToView(r.area, cropBox, rotation), r.angle));
                 regionIndexOnPage.add(i);
             }
         }
@@ -253,7 +385,102 @@ public final class RedactionDialog extends JDialog {
         info.setText(others == 0 ? I18n.t("redact.areas", onPage.size())
                 : I18n.t("redact.areasOthers", onPage.size(), others));
         resetButton.setEnabled(!onPage.isEmpty());
+        undoButton.setEnabled(!undoStack.isEmpty());
         applyButton.setEnabled(!regions.isEmpty());
+    }
+
+    // ---------------------------------------------------------------- zoom
+
+    /**
+     * The zoom that is shown now in percent: the zoom, or what the fitted page is.
+     */
+    private int currentZoom() {
+        return zoom > 0 ? zoom : (int) Math.round(canvas.getScale() * canvas.getPixelsPerPoint() * 100);
+    }
+
+    /**
+     * The biggest zoom that renders no more than {@link #MAX_PIXELS} pixels.
+     */
+    private int maxZoom() {
+        int most = (int) Math.floor(100 * Math.sqrt(MAX_PIXELS / (pageWidth * pageHeight)));
+        return Math.max(ZoomSteps.smallest(), Math.min(ZoomSteps.largest(), most));
+    }
+
+    /**
+     * The next zoom step, see {@link ZoomSteps}. The page is rendered again for a zoom that needs a higher resolution
+     * than the picture has.
+     *
+     * @param bigger True for the next bigger, false for the next smaller step.
+     * @return The zoom in percent, the one that is shown now if there is no such step.
+     */
+    private int nextZoom(boolean bigger) {
+        return ZoomSteps.next(zoom, currentZoom(), maxZoom(), bigger);
+    }
+
+    /**
+     * Zooms the page. The point of the page that is below the given point stays below it.
+     *
+     * @param percent The zoom in percent, 0 to fit the page to the window.
+     * @param anchor  A point in the coordinates of the viewport, null for its center.
+     */
+    private void setZoom(int percent, Point anchor) {
+        JViewport viewport = scroll.getViewport();
+        Point at = anchor == null ? new Point(viewport.getWidth() / 2, viewport.getHeight() / 2) : anchor;
+        Point2D onPage = canvas.toPoints(new Point(viewport.getViewPosition().x + at.x, viewport.getViewPosition().y + at.y));
+        zoom = percent;
+        if (percent == 0) {
+            canvas.setDisplayWidth(0);
+        } else {
+            canvas.setDisplayWidth((int) Math.round(pageWidth * percent / 100.0));
+            // A sharper picture is rendered if the zoom needs it, the one we have is scaled until it is there.
+            if (72.0 * percent / 100.0 > imageDpi)
+                renderAt(72.0 * percent / 100.0);
+        }
+        // The layout now, so the page can be put back below the anchor.
+        scroll.validate();
+        Point now = canvas.toComponentPoint(onPage);
+        int x = Math.max(0, Math.min(now.x - at.x, canvas.getWidth() - viewport.getWidth()));
+        int y = Math.max(0, Math.min(now.y - at.y, canvas.getHeight() - viewport.getHeight()));
+        viewport.setViewPosition(new Point(x, y));
+        updateZoom();
+    }
+
+    private void updateZoom() {
+        int current = currentZoom();
+        zoomLabel.setText(zoom == 0 ? I18n.t("zoom.fitted", current) : zoom + " %");
+        zoomFitButton.setEnabled(zoom != 0);
+        zoomOutButton.setEnabled(nextZoom(false) != (zoom == 0 ? 0 : zoom));
+        zoomInButton.setEnabled(nextZoom(true) != (zoom == 0 ? 0 : zoom));
+    }
+
+    /**
+     * Renders the page at a higher resolution in the background and shows it when it is there.
+     */
+    private void renderAt(final double dpi) {
+        final int request = ++renderRequest;
+        new SwingWorker<BufferedImage, Void>() {
+            @Override
+            protected BufferedImage doInBackground() throws Exception {
+                // The document is read by one thread at a time, the search of the dialog reads it, too.
+                synchronized (document) {
+                    return new PDFRenderer(document).renderImageWithDPI(pageNb - 1, (float) dpi);
+                }
+            }
+
+            @Override
+            protected void done() {
+                // Another zoom was asked for meanwhile: this picture is no longer needed.
+                if (request != renderRequest)
+                    return;
+                try {
+                    canvas.setImage(get(), dpi / 72.0);
+                    imageDpi = dpi;
+                } catch (Exception e) {
+                    // The picture we have stays, it is only less sharp.
+                    Log.exception(e);
+                }
+            }
+        }.execute();
     }
 
     /**
@@ -290,379 +517,5 @@ public final class RedactionDialog extends JDialog {
         }
         dialog.setVisible(true);
         return dialog.confirmed && !dialog.regions.isEmpty() ? new ArrayList<>(dialog.regions) : null;
-    }
-
-    /**
-     * Notifications of the canvas. Areas are in points of the displayed page,
-     * indices refer to the list given to {@link AreaCanvas#setAreas}.
-     */
-    private interface AreaListener {
-        void added(Rectangle2D area);
-
-        void changed(int index, Rectangle2D area);
-
-        void removed(int index);
-
-        void selectionChanged();
-    }
-
-    /**
-     * Shows a page image and lets the user draw, select, move and resize rectangles.
-     * Areas are reported in points of the displayed page.
-     */
-    private static final class AreaCanvas extends JComponent {
-
-        private static final int LEFT = 1;
-        private static final int RIGHT = 2;
-        private static final int TOP = 4;
-        private static final int BOTTOM = 8;
-
-        /**
-         * Distance in pixels to an edge that grabs the edge.
-         */
-        private static final int GRAB = 5;
-        private static final int HANDLE_SIZE = 6;
-
-        private enum Mode {NONE, CREATE, MOVE, RESIZE}
-
-        private BufferedImage image;
-        private Color color = Color.BLACK;
-        private final Color selectColor = Color.RED;
-        private final BasicStroke stroke = new BasicStroke(2f);
-        private double pixelsPerPoint = 1;
-        private final List<Rectangle2D> areas = new ArrayList<>();
-        private int selected = -1;
-        private AreaListener areaListener;
-
-        private Mode mode = Mode.NONE;
-        private Rectangle2D dragOriginal;
-        private Point2D dragStartPoint;
-        private int dragHandle;
-        private boolean dragChanged;
-
-        /**
-         * Rubber band for new areas in component coordinates.
-         */
-        private Point dragStart;
-        private Point dragEnd;
-
-        AreaCanvas() {
-            setFocusable(true);
-            setCursor(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR));
-
-            MouseAdapter ma = new MouseAdapter() {
-                @Override
-                public void mousePressed(MouseEvent e) {
-                    requestFocusInWindow();
-                    if (image == null)
-                        return;
-
-                    int handle = selected >= 0 ? handleAt(e.getPoint(), toComponent(areas.get(selected))) : 0;
-                    if (handle != 0) {
-                        startDrag(Mode.RESIZE, e.getPoint(), selected, handle);
-                        return;
-                    }
-                    int hit = areaAt(e.getPoint());
-                    if (hit >= 0) {
-                        select(hit);
-                        startDrag(Mode.MOVE, e.getPoint(), hit, 0);
-                    } else {
-                        select(-1);
-                        mode = Mode.CREATE;
-                        dragStart = e.getPoint();
-                        dragEnd = e.getPoint();
-                    }
-                }
-
-                @Override
-                public void mouseDragged(MouseEvent e) {
-                    switch (mode) {
-                        case CREATE -> dragEnd = e.getPoint();
-                        case MOVE -> move(e.getPoint());
-                        case RESIZE -> resize(e.getPoint());
-                        default -> {
-                        }
-                    }
-                    repaint();
-                }
-
-                @Override
-                public void mouseReleased(MouseEvent e) {
-                    if (mode == Mode.CREATE && image != null && areaListener != null) {
-                        Rectangle2D r = new Rectangle2D.Double();
-                        r.setFrameFromDiagonal(toPoints(dragStart), toPoints(e.getPoint()));
-                        r = clipToImage(r);
-                        // Ignore accidental clicks.
-                        if (r.getWidth() * getScale() * pixelsPerPoint >= 3
-                                && r.getHeight() * getScale() * pixelsPerPoint >= 3) {
-                            areaListener.added(r);
-                        }
-                    } else if ((mode == Mode.MOVE || mode == Mode.RESIZE) && dragChanged && areaListener != null) {
-                        areaListener.changed(selected, areas.get(selected));
-                    }
-                    mode = Mode.NONE;
-                    dragStart = null;
-                    dragEnd = null;
-                    dragOriginal = null;
-                    dragChanged = false;
-                    repaint();
-                    updateCursor(e.getPoint());
-                }
-
-                @Override
-                public void mouseMoved(MouseEvent e) {
-                    updateCursor(e.getPoint());
-                }
-            };
-            addMouseListener(ma);
-            addMouseMotionListener(ma);
-
-            Action delete = new AbstractAction() {
-                @Override
-                public void actionPerformed(ActionEvent e) {
-                    if (selected >= 0 && areaListener != null)
-                        areaListener.removed(selected);
-                }
-            };
-            getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0), "deleteArea");
-            getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_BACK_SPACE, 0), "deleteArea");
-            getActionMap().put("deleteArea", delete);
-        }
-
-        void setColor(Color color) {
-            this.color = color;
-            repaint();
-        }
-
-        void setImage(BufferedImage image, double pixelsPerPoint) {
-            this.image = image;
-            this.pixelsPerPoint = pixelsPerPoint;
-            repaint();
-        }
-
-        /**
-         * Sets the areas. The selection is kept if possible.
-         */
-        void setAreas(List<Rectangle2D> newAreas) {
-            areas.clear();
-            areas.addAll(newAreas);
-            if (selected >= areas.size())
-                select(-1);
-            repaint();
-        }
-
-        int getAreaCount() {
-            return areas.size();
-        }
-
-        int getSelected() {
-            return selected;
-        }
-
-        void select(int index) {
-            if (index >= areas.size())
-                index = -1;
-            if (index != selected) {
-                selected = index;
-                repaint();
-                if (areaListener != null)
-                    areaListener.selectionChanged();
-            }
-        }
-
-        void setAreaListener(AreaListener areaListener) {
-            this.areaListener = areaListener;
-        }
-
-        private void startDrag(Mode mode, Point p, int index, int handle) {
-            this.mode = mode;
-            this.dragOriginal = (Rectangle2D) areas.get(index).clone();
-            this.dragStartPoint = toPoints(p);
-            this.dragHandle = handle;
-            this.dragChanged = false;
-        }
-
-        private void move(Point p) {
-            Point2D now = toPoints(p);
-            Rectangle2D r = dragOriginal;
-            Rectangle2D page = pageBounds();
-            // Keep the area inside the page.
-            double dx = Math.max(page.getMinX() - r.getMinX(), Math.min(page.getMaxX() - r.getMaxX(), now.getX() - dragStartPoint.getX()));
-            double dy = Math.max(page.getMinY() - r.getMinY(), Math.min(page.getMaxY() - r.getMaxY(), now.getY() - dragStartPoint.getY()));
-            areas.set(selected, new Rectangle2D.Double(r.getX() + dx, r.getY() + dy, r.getWidth(), r.getHeight()));
-            dragChanged = dx != 0 || dy != 0;
-        }
-
-        private void resize(Point p) {
-            Point2D now = toPoints(p);
-            Rectangle2D page = pageBounds();
-            double x1 = dragOriginal.getMinX(), x2 = dragOriginal.getMaxX();
-            double y1 = dragOriginal.getMinY(), y2 = dragOriginal.getMaxY();
-            double nx = Math.max(page.getMinX(), Math.min(page.getMaxX(), now.getX()));
-            double ny = Math.max(page.getMinY(), Math.min(page.getMaxY(), now.getY()));
-            if ((dragHandle & LEFT) != 0)
-                x1 = nx;
-            if ((dragHandle & RIGHT) != 0)
-                x2 = nx;
-            if ((dragHandle & TOP) != 0)
-                y1 = ny;
-            if ((dragHandle & BOTTOM) != 0)
-                y2 = ny;
-            // The edges may cross, the rectangle is normalized.
-            Rectangle2D r = new Rectangle2D.Double();
-            r.setFrameFromDiagonal(x1, y1, x2, y2);
-            areas.set(selected, r);
-            dragChanged = true;
-        }
-
-        /**
-         * The topmost area (last drawn) at the position.
-         */
-        private int areaAt(Point p) {
-            for (int i = areas.size() - 1; i >= 0; --i) {
-                if (toComponent(areas.get(i)).contains(p))
-                    return i;
-            }
-            return -1;
-        }
-
-        /**
-         * Which edges of the (selected) area in component coordinates are grabbed at the position.
-         *
-         * @return Bit mask of LEFT, RIGHT, TOP, BOTTOM or 0.
-         */
-        private static int handleAt(Point p, Rectangle2D c) {
-            if (p.x < c.getMinX() - GRAB || p.x > c.getMaxX() + GRAB
-                    || p.y < c.getMinY() - GRAB || p.y > c.getMaxY() + GRAB)
-                return 0;
-            int mask = 0;
-            if (Math.abs(p.x - c.getMinX()) <= GRAB)
-                mask |= LEFT;
-            else if (Math.abs(p.x - c.getMaxX()) <= GRAB)
-                mask |= RIGHT;
-            if (Math.abs(p.y - c.getMinY()) <= GRAB)
-                mask |= TOP;
-            else if (Math.abs(p.y - c.getMaxY()) <= GRAB)
-                mask |= BOTTOM;
-            return mask;
-        }
-
-        private void updateCursor(Point p) {
-            int type = Cursor.CROSSHAIR_CURSOR;
-            if (image != null) {
-                int handle = selected >= 0 ? handleAt(p, toComponent(areas.get(selected))) : 0;
-                if (handle != 0) {
-                    type = switch (handle) {
-                        case LEFT -> Cursor.W_RESIZE_CURSOR;
-                        case RIGHT -> Cursor.E_RESIZE_CURSOR;
-                        case TOP -> Cursor.N_RESIZE_CURSOR;
-                        case BOTTOM -> Cursor.S_RESIZE_CURSOR;
-                        case LEFT | TOP -> Cursor.NW_RESIZE_CURSOR;
-                        case RIGHT | TOP -> Cursor.NE_RESIZE_CURSOR;
-                        case LEFT | BOTTOM -> Cursor.SW_RESIZE_CURSOR;
-                        default -> Cursor.SE_RESIZE_CURSOR;
-                    };
-                } else if (areaAt(p) >= 0) {
-                    type = Cursor.MOVE_CURSOR;
-                }
-            }
-            setCursor(Cursor.getPredefinedCursor(type));
-        }
-
-        /**
-         * Component pixels per image pixel.
-         */
-        private double getScale() {
-            if (image == null)
-                return 1;
-            return Math.min((double) getWidth() / image.getWidth(), (double) getHeight() / image.getHeight());
-        }
-
-        private double offsetX() {
-            return (getWidth() - image.getWidth() * getScale()) / 2;
-        }
-
-        private double offsetY() {
-            return (getHeight() - image.getHeight() * getScale()) / 2;
-        }
-
-        private Point2D toPoints(Point p) {
-            double s = getScale() * pixelsPerPoint;
-            return new Point2D.Double((p.x - offsetX()) / s, (p.y - offsetY()) / s);
-        }
-
-        private Rectangle2D pageBounds() {
-            return new Rectangle2D.Double(0, 0, image.getWidth() / pixelsPerPoint, image.getHeight() / pixelsPerPoint);
-        }
-
-        private Rectangle2D clipToImage(Rectangle2D r) {
-            return r.createIntersection(pageBounds());
-        }
-
-        private Rectangle2D toComponent(Rectangle2D r) {
-            double s = getScale() * pixelsPerPoint;
-            return new Rectangle2D.Double(offsetX() + r.getX() * s, offsetY() + r.getY() * s, r.getWidth() * s, r.getHeight() * s);
-        }
-
-
-        @Override
-        protected void paintComponent(Graphics g) {
-            Graphics2D g2 = (Graphics2D) g.create();
-            try {
-                g2.setColor(getBackground());
-                g2.fillRect(0, 0, getWidth(), getHeight());
-                if (image == null)
-                    return;
-                g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-                g2.drawImage(image, (int) offsetX(), (int) offsetY(),
-                        (int) (image.getWidth() * getScale()), (int) (image.getHeight() * getScale()), null);
-
-                // Semi transparent, so the user still sees what is going to be removed.
-                for (int i = 0; i < areas.size(); ++i) {
-                    Rectangle2D c = toComponent(areas.get(i));
-                    g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.6f));
-                    g2.setColor(color);
-                    g2.fill(c);
-                    g2.setComposite(AlphaComposite.SrcOver);
-                    g2.setStroke(new BasicStroke(1f));
-                    if (i == selected) {
-                        g2.setColor(selectColor);
-                        g2.setStroke(stroke);
-                        g2.draw(c);
-                        paintHandles(g2, c);
-                    } else {
-                        // Visible on bright pages even if the color is white.
-                        g2.setColor(color.darker());
-                        g2.draw(c);
-                    }
-                }
-                if (mode == Mode.CREATE && dragStart != null && dragEnd != null) {
-                    Rectangle2D r = new Rectangle2D.Double();
-                    r.setFrameFromDiagonal(dragStart, dragEnd);
-                    g2.setColor(Color.RED);
-                    g2.setStroke(new BasicStroke(1f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f, new float[]{4f, 4f}, 0f));
-                    g2.draw(r);
-                }
-            } finally {
-                g2.dispose();
-            }
-        }
-
-        private static void paintHandles(Graphics2D g2, Rectangle2D c) {
-            double[] xs = {c.getMinX(), c.getCenterX(), c.getMaxX()};
-            double[] ys = {c.getMinY(), c.getCenterY(), c.getMaxY()};
-            g2.setStroke(new BasicStroke(1f));
-            for (int ix = 0; ix < 3; ++ix) {
-                for (int iy = 0; iy < 3; ++iy) {
-                    if (ix == 1 && iy == 1)
-                        continue;
-                    Rectangle2D h = new Rectangle2D.Double(xs[ix] - HANDLE_SIZE / 2.0, ys[iy] - HANDLE_SIZE / 2.0, HANDLE_SIZE, HANDLE_SIZE);
-                    g2.setColor(Color.WHITE);
-                    g2.fill(h);
-                    g2.setColor(Color.RED);
-                    g2.draw(h);
-                }
-            }
-        }
     }
 }

@@ -1,24 +1,12 @@
 package com.bw.pdfixit.ui;
 
 
-
-import com.bw.pdfixit.ui.fonts.ImportedFontsDialog;
-import com.bw.pdfixit.ui.fonts.FontsDialog;
-import com.bw.pdfixit.AboutInfo;
-import com.bw.pdfixit.I18n;
-import com.bw.pdfixit.Manual;
-import com.bw.pdfixit.DocumentInformation;
+import com.bw.jtools.svg.SVGConverter;
+import com.bw.jtools.ui.ShapeIcon;
+import com.bw.jtools.ui.ShapeMultiResolutionImage;
+import com.bw.pdfixit.*;
 import com.bw.pdfixit.fonts.FontEmbedException;
 import com.bw.pdfixit.invoice.EInvoice;
-import com.bw.pdfixit.Log;
-import com.bw.pdfixit.PdfRisk;
-import com.bw.pdfixit.PdfStandard;
-import com.bw.pdfixit.PdfStandardProfile;
-import com.bw.pdfixit.Main;
-import com.bw.pdfixit.Preferences;
-import com.bw.pdfixit.Redactor;
-import com.bw.pdfixit.SafeFile;
-import com.bw.pdfixit.SignatureTool;
 import com.bw.pdfixit.model.DocumentProxy;
 import com.bw.pdfixit.model.MergeOptions;
 import com.bw.pdfixit.model.Page;
@@ -26,10 +14,13 @@ import com.bw.pdfixit.model.RenderQueue;
 import com.bw.pdfixit.toast.Toast;
 import com.bw.pdfixit.toast.ToastType;
 import com.bw.pdfixit.toast.Toaster;
-import com.bw.pdfixit.ValidationResult;
-import com.bw.jtools.svg.SVGConverter;
-import com.bw.jtools.ui.ShapeIcon;
-import com.bw.jtools.ui.ShapeMultiResolutionImage;
+import com.bw.pdfixit.ui.fonts.FontsDialog;
+import com.bw.pdfixit.ui.fonts.ImportedFontsDialog;
+import com.bw.pdfixit.ui.invoice.InvoiceEditorPanel;
+import com.bw.pdfixit.ui.wizard.StartPage;
+import com.bw.pdfixit.ui.wizard.Wizard;
+import com.bw.pdfixit.ui.wizard.Wizards;
+import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.FlatLaf;
 import com.formdev.flatlaf.fonts.roboto.FlatRobotoFont;
 import com.formdev.flatlaf.util.SystemInfo;
@@ -56,7 +47,10 @@ import java.awt.dnd.DropTargetDropEvent;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.event.KeyAdapter;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
+import java.beans.PropertyChangeListener;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
@@ -77,9 +71,11 @@ import java.util.function.Consumer;
 
 /**
  * Main panel to show the pdf tool. Wrap this panel into a frame to create an app.
- * See {@link Main#main(String[])}.
+ * See {@link Main#main(String[])}.<br>
+ * The UI holds the controls, the document and all actions. The panels ({@link DocumentPanel},
+ * {@link StandardPanel}, {@link PageToolsStrip}, ...) only arrange the controls, they get them from here.
  */
-public class UI extends JSplitPane {
+public class UI extends JPanel {
 
     public static JFrame mainWindow;
 
@@ -98,19 +94,37 @@ public class UI extends JSplitPane {
     protected static FileNameExtensionFilter imageFilter = new FileNameExtensionFilter(I18n.t("filter.image"), "jpeg", "jpg", "png");
     protected static FileNameExtensionFilter sigFilter = new FileNameExtensionFilter(I18n.t("filter.p12"), "p12");
 
-    private final JTextField ownerPasswordField = new JTextField();
-    private final JTextField userPasswordField = new JTextField();
+    final JTextField ownerPasswordField = new JTextField();
+    final JTextField userPasswordField = new JTextField();
 
-    private final JButton saveButton = new JButton(I18n.t("ui.save"));
-    private final JCheckBox compression = new JCheckBox(I18n.t("ui.compression"));
+    final JButton saveButton = new JButton(I18n.t("ui.save"));
+    final JCheckBox compression = new JCheckBox(I18n.t("ui.compression"));
 
-    private final PageWidgetContainer pages = new PageWidgetContainer();
+    final PageWidgetContainer pages = new PageWidgetContainer();
+    /**
+     * The zoom of the pages, at the bottom of the {@link PageToolsStrip} (the pages keep the full height), like in
+     * the {@link RedactionDialog}: a step bigger or smaller, the percent between, fit the pages to the width.
+     * Ctrl and the mouse wheel zoom too.
+     */
+    final RoundSvgButton zoomInButton = new RoundSvgButton("/svg/page-tool-zoom-in.svg",
+            RoundSvgButton.NAVIGATION_SIZE_IN_FONT_HEIGHTS);
+    final RoundSvgButton zoomOutButton = new RoundSvgButton("/svg/page-tool-zoom-out.svg",
+            RoundSvgButton.NAVIGATION_SIZE_IN_FONT_HEIGHTS);
+    final RoundSvgButton zoomFitButton = new RoundSvgButton("/svg/page-tool-zoom-fit.svg",
+            RoundSvgButton.NAVIGATION_SIZE_IN_FONT_HEIGHTS);
+    final JLabel zoomLabel = new JLabel(" ", SwingConstants.CENTER);
+    private static final String CARD_START = "start";
+    private static final String CARD_PAGES = "pages";
+    /**
+     * Shows the start page while there is no document, otherwise the pages.
+     */
+    private final JPanel pagesCards = new JPanel(new java.awt.CardLayout());
+    private StartPage startPage;
     protected DocumentProxy documentProxy;
-    private final InvoiceActions invoiceActions = new InvoiceActions(this, () -> documentProxy, () -> toaster);
+    final InvoiceActions invoiceActions = new InvoiceActions(this, toaster);
     private PageWidget selectedPage;
 
-    private final JTextField pageCount = new JTextField(4);
-    private final JLabel pdfStandard = new JLabel() {
+    final JLabel pdfStandard = new JLabel() {
         @Override
         public void updateUI() {
             super.updateUI();
@@ -118,8 +132,8 @@ public class UI extends JSplitPane {
             setForeground(UIManager.getColor("Label.disabledForeground"));
         }
     };
-    private final JButton standardButton = new JButton(I18n.t("ui.standardButton"));
-    private final JButton generateOwner = new JButton(I18n.t("ui.generateOwner"));
+    final JButton standardButton = new JButton(I18n.t("ui.standardButton"));
+    final JButton generateOwner = new JButton(getIcon("svg/button-generate"));
     /**
      * If the effective document declares PDF/A. Everything that would violate PDF/A is disabled then.
      */
@@ -145,76 +159,195 @@ public class UI extends JSplitPane {
      */
     private DocumentProxy reportedProxy;
     private ValidationResult reportedResult = ValidationResult.conform();
-    private final JCheckBox useDocumentInformation = new JCheckBox(I18n.t("ui.useDocInfo"));
-    private final JButton clearInformation = new JButton(I18n.t("ui.clearInfo"));
-    private final JTextField title = new JTextField(15);
-    private final JTextField author = new JTextField(15);
-    private final JTextField creator = new JTextField(15);
-    private final JTextField producer = new JTextField(15);
-    private final JTextField subject = new JTextField(15);
+    /**
+     * The document state the last PDF/A check was done for, see {@link DocumentProxy#getContentGeneration()}.
+     * Rotating, moving or deleting pages doesn't change it, so they start no check.
+     */
+    private DocumentProxy checkedProxy;
+    private int checkedGeneration;
+    final JCheckBox useDocumentInformation = new JCheckBox(I18n.t("ui.useDocInfo"));
+    final JButton clearInformation = new JButton(I18n.t("ui.clearInfo"));
+    final JButton exportXmp = new JButton(I18n.t("ui.exportXmp"));
+    final JTextField title = new JTextField(15);
+    final JTextField author = new JTextField(15);
+    final JTextField creator = new JTextField(15);
+    final JTextField producer = new JTextField(15);
+    final JTextField subject = new JTextField(15);
 
-    private final JTextField keywords = new JTextField(15);
-    private final JLabel statusMessage = new JLabel();
+    final JTextField keywords = new JTextField(15);
+    /**
+     * The error toasts of the current document. They stay until the user closes them or a new document is loaded.
+     */
+    private final java.util.List<Toast> documentErrors = new java.util.ArrayList<>();
+    /**
+     * The "Loading…" toast of the main document while it is loaded, closed if the loading fails.
+     */
+    private final Toast[] loadingToast = new Toast[1];
 
     /////////////////////////////////////////////
     // Signing
     /// //////////////////////////////////////////
-    private final JCheckBox sign = new JCheckBox(I18n.t("ui.sign"));
-    private final JLabel signatureKeyFileName = new JLabel();
+    final JCheckBox sign = new JCheckBox(I18n.t("ui.sign"));
+    final JLabel signatureKeyFileName = new JLabel();
     private File signatureKeyFile;
-    private final JPasswordField signaturePasswordField = new JPasswordField();
+    final JPasswordField signaturePasswordField = new JPasswordField();
+    final JButton browseSignature = new JButton(I18n.t("ui.selectP12"));
 
 
     /////////////////////////////////////////////
     // Permissions
     /// //////////////////////////////////////////
 
-    private final JCheckBox allowPrinting = new JCheckBox(I18n.t("perm.print"));
-    private final JCheckBox allowExtraction = new JCheckBox(I18n.t("perm.extract"));
-    private final JCheckBox allowModification = new JCheckBox(I18n.t("perm.modify"));
-    private final JCheckBox allowFillIn = new JCheckBox(I18n.t("perm.fillIn"));
-    private final JCheckBox allowAssembly = new JCheckBox(I18n.t("perm.assemble"));
-    private final JCheckBox allowAnnotations = new JCheckBox(I18n.t("perm.annotations"));
+    final JCheckBox allowPrinting = new JCheckBox(I18n.t("perm.print"));
+    final JCheckBox allowExtraction = new JCheckBox(I18n.t("perm.extract"));
+    final JCheckBox allowModification = new JCheckBox(I18n.t("perm.modify"));
+    final JCheckBox allowFillIn = new JCheckBox(I18n.t("perm.fillIn"));
+    final JCheckBox allowAssembly = new JCheckBox(I18n.t("perm.assemble"));
+    final JCheckBox allowAnnotations = new JCheckBox(I18n.t("perm.annotations"));
 
     /////////////////////////////////////////////
     // Page manipulation
     /// //////////////////////////////////////////
 
-    private final JButton deleteButton = new JButton(getIcon("delete"));
-    private final JButton renderToImageButton = new JButton(I18n.t("ui.toImage"));
-    private final JButton renderAllToImageButton = new JButton(I18n.t("ui.allToImages"));
-    private final JButton redactButton = new JButton(I18n.t("ui.redact"));
-    private final JButton rotateClockwiseButton = new JButton(getIcon("rotateClockwise"));
-    private final JButton rotateAllClockwiseButton = new JButton(getIcon("rotateAllClockwise"));
-    private final JButton moveLeft = new JButton(getIcon("moveLeft"));
-    private final JButton moveRight = new JButton(getIcon("moveRight"));
-    private final JButton exportImages = new JButton(I18n.t("ui.exportImages"));
-    private final JTextField rotation = new JTextField(4);
-    private final JLabel pageNb = new JLabel();
-    private final JLabel quality = new JLabel();
-    private final JButton browseButton = new JButton(getIcon("openPdf"));
-    private final JButton browseAppendButton = new JButton(getIcon("addPdf"));
+    final RoundSvgButton deleteButton = new RoundSvgButton("/svg/page-tool-delete.svg");
+    final JMenuItem renderToImageButton = new JMenuItem(I18n.t("ui.toImage.item"));
+    final JMenuItem renderAllToImageButton = new JMenuItem(I18n.t("ui.allToImages.item"));
+    final RoundSvgButton redactButton = new RoundSvgButton("/svg/page-tool-redact.svg");
+    final RoundSvgButton rotateClockwiseButton = new RoundSvgButton("/svg/page-tool-rotate.svg");
+    final RoundSvgButton rotateAllClockwiseButton = new RoundSvgButton("/svg/page-tool-rotate-all.svg");
+    /**
+     * Change the order of the pages. Their symbols show a page with an arrow, so they don't look like the
+     * {@link #previousPageButton} and the {@link #nextPageButton}, which only select.
+     */
+    final RoundSvgButton moveUp = new RoundSvgButton("/svg/page-tool-move-up.svg");
+    final RoundSvgButton moveDown = new RoundSvgButton("/svg/page-tool-move-down.svg");
+    /**
+     * Select the previous and the next page, above and below the {@link #pageCounter}.
+     */
+    final RoundSvgButton previousPageButton = new RoundSvgButton("/svg/page-tool-previous.svg",
+            RoundSvgButton.NAVIGATION_SIZE_IN_FONT_HEIGHTS);
+    final RoundSvgButton nextPageButton = new RoundSvgButton("/svg/page-tool-next.svg",
+            RoundSvgButton.NAVIGATION_SIZE_IN_FONT_HEIGHTS);
+    final JMenuItem exportImages = new JMenuItem(I18n.t("ui.exportImages.item"));
+    /**
+     * Opens the menu with the image actions of the pages.
+     */
+    final RoundSvgButton imagesButton = new RoundSvgButton("/svg/page-tool-images.svg");
+    private final JPopupMenu imagesMenu = new JPopupMenu();
+    /**
+     * Tells why passwords and permissions can't be set, on top of the {@link PermissionsPanel}. Empty if they can. It
+     * always has the height of two lines, so the controls below don't move when the text changes.
+     */
+    final JLabel permissionsHint = new JLabel(" ") {
+        @Override
+        public Dimension getPreferredSize() {
+            Dimension size = super.getPreferredSize();
+            size.height = Math.max(size.height, 2 * getFontMetrics(getFont()).getHeight());
+            return size;
+        }
+    };
+    /**
+     * Selected page and page count, on top of the {@link PageToolsStrip}.
+     */
+    final PageCounter pageCounter = new PageCounter(rotateClockwiseButton);
+    /**
+     * The rotation of the selected page, below the {@link #pageCounter}.
+     */
+    final PageOrientation pageOrientation = new PageOrientation();
+    final JButton browseButton = new JButton(I18n.t("menu.file.open"), getIcon("openPdf"));
+    final JButton browseAppendButton = new JButton(I18n.t("menu.file.add"), getIcon("addPdf"));
+    /**
+     * The editor of the e-invoice: creates the invoice of the document or edits it, see {@link InvoicePanel}.
+     */
+    final InvoiceEditorPanel invoiceEditor = new InvoiceEditorPanel(toaster);
+    /**
+     * The result of the automatic check of the invoice (of the document, or of the draft of the editor), or empty if
+     * there is none, see {@link InvoiceActions}.
+     */
+    final JLabel invoiceStatus = new JLabel(" ");
+    /**
+     * Shows the messages and the report of the check of the invoice.
+     */
+    final JButton invoiceDetailsButton = new JButton(I18n.t("ui.invoice.details"));
+    final JButton validatePdfaButton = new JButton(I18n.t("menu.validation.pdfa"));
+    /**
+     * Identifiers of the side tabs, see {@link SideTabs}. They are stored in the preferences.
+     */
+    private static final String TAB_DOCUMENT = "document";
+    private static final String TAB_INVOICE = "invoice";
+    private static final String TAB_PERMISSIONS = "permissions";
 
-    private final String HELP_ICON_NAME = "OptionPane.questionIcon";
+    final RoundSvgButton invoiceHelp = RoundSvgButton.createBadge();
 
-    private final JButton permissionHelp = new JButton(UIManager.getIcon(HELP_ICON_NAME));
-    private final JButton signingHelp = new JButton(UIManager.getIcon(HELP_ICON_NAME));
+    final RoundSvgButton permissionHelp = RoundSvgButton.createBadge();
+    final RoundSvgButton signingHelp = RoundSvgButton.createBadge();
 
-    private Font normalFont;
-    private Font hintFont;
+    Font normalFont;
+    Font hintFont;
 
     /////////////////////////////////////////////
     // Splitting
     /// //////////////////////////////////////////
-    private final JSpinner pagesPerDocument = new JSpinner(new SpinnerNumberModel(1, 1, 100, 1));
-    private final JButton splitDocument = new JButton(I18n.t("ui.split"));
+    final JSpinner pagesPerDocument = new JSpinner(new SpinnerNumberModel(1, 1, 100, 1));
+    final JButton splitDocument = new JButton(I18n.t("ui.split"));
 
     protected final RenderQueue renderQueue = new RenderQueue();
+
+    /**
+     * The controls on the left, the page preview on the right, see {@link #createLayout()}.
+     */
+    private JSplitPane splitPane;
+    /**
+     * The panels of the open tabs, left of the divider.
+     */
+    private TabDrawer drawer;
+    /**
+     * Where the user put the divider (pixels from the left edge of the split pane), 0 if the user never moved it. The
+     * divider is there, but never left of what the open tabs need, see {@link #dividerTarget(int)}. This value, not the
+     * place of the divider, is what is stored.
+     */
+    private int userDivider;
+    /**
+     * The width of the controls as long as the user has no choice: the most that a tab other than the invoice needed so
+     * far (the content grows, e.g. with the standard of a document). So the divider doesn't move between these tabs,
+     * only for the invoice, which needs more. It is not stored.
+     */
+    private int defaultDivider;
+    /**
+     * Where the running move of the divider ends.
+     */
+    private int dividerMovesTo;
+    /**
+     * True while the program moves the divider, so it is not taken for a move of the user.
+     */
+    private boolean adjustingDivider;
+    private javax.swing.Timer dividerAnimation;
+    /**
+     * Duration of the move of the divider if another tab needs more or less room.
+     */
+    private static final int DIVIDER_MOVE_MS = 150;
+    /**
+     * Writes the window state a moment after the last change of the size or the divider, see {@link #applyWindowState}.
+     */
+    private javax.swing.Timer windowStateTimer;
+    /**
+     * What the preferences hold, or what the window had when it was shown if nothing is stored. Only a change is written,
+     * so a user who never changes the window has nothing stored and gets the default size at each start.
+     */
+    private int storedWidth;
+    private int storedHeight;
+    private int storedDivider;
+    private boolean storedMaximized;
 
     protected final Deque<UIPdfLoadWorker> loadWorker = new ArrayDeque<>();
     protected UIPdfLoadWorker currentLoader;
 
     public void handleDrop(DropTargetDropEvent dtde, boolean append) {
+        // Not files (e.g. text dragged over the window): nothing to do.
+        if (!dtde.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+            dtde.rejectDrop();
+            return;
+        }
         try {
             dtde.acceptDrop(DnDConstants.ACTION_COPY_OR_MOVE);
             if (dtde.getTransferable().getTransferData(DataFlavor.javaFileListFlavor) instanceof java.util.List<?> droppedFiles) {
@@ -223,7 +356,7 @@ public class UI extends JSplitPane {
                         if (append && documentProxy != null) {
                             appendPdf(file, new MergeOptions());
                         } else {
-                            if (!confirmDiscard(I18n.t("ui.confirm.load")))
+                            if (!confirmInvoiceDiscard(I18n.t("ui.confirm.load")) || !confirmDiscard(I18n.t("ui.confirm.load")))
                                 break;
                             selectPdf(file);
                             append = true;
@@ -238,89 +371,23 @@ public class UI extends JSplitPane {
     }
 
     public UI() {
-        super(JSplitPane.HORIZONTAL_SPLIT);
+        super(new BorderLayout());
 
         normalFont = UIManager.getFont("Panel.font");
         hintFont = normalFont.deriveFont(Font.ITALIC);
-        final FontMetrics fm = getFontMetrics(normalFont);
-        final int charWith = fm.charWidth('W');
-
-        JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 5));
 
         saveButton.setEnabled(false);
         saveButton.setFont(normalFont.deriveFont(Font.BOLD, normalFont.getSize2D() * 1.5f));
+        setPrimary(saveButton);
         browseAppendButton.setEnabled(false);
         splitDocument.setEnabled(false);
-        rotation.setEditable(false);
 
-        GridBagConstraints gcLabel = new GridBagConstraints();
-        gcLabel.anchor = GridBagConstraints.NORTHWEST;
-        gcLabel.fill = GridBagConstraints.NONE;
-        gcLabel.insets = new Insets(0, 0, 5, 5);
-
-        GridBagConstraints gc = new GridBagConstraints();
-        gc.insets = new Insets(0, 0, 5, 5);
-        gc.gridx = 0;
-        gc.gridy = 0;
-        gc.gridwidth = 2;
-        gc.weightx = 1;
-        gc.fill = GridBagConstraints.HORIZONTAL;
-        gc.anchor = GridBagConstraints.NORTHWEST;
-        panel.add(createDocumentPanel(), gc);
-
+        wireDocumentControls();
         pages.addSelectionListener(e -> setSelectedPage(e.getFirstIndex() < 0 ? null : pages.getSelectedPage()));
-
-        JPanel manipulations = new JPanel(new GridBagLayout());
-        GridBagConstraints pmGc = new GridBagConstraints();
-        pmGc.anchor = GridBagConstraints.NORTHWEST;
-        pmGc.gridx = 0;
-        pmGc.gridy = 0;
-        pmGc.weightx = 0.5;
-        pmGc.fill = GridBagConstraints.BOTH;
-        manipulations.add(createPageManipulationPanel(), pmGc);
-        pmGc.gridx++;
-        manipulations.add(createSplitterPanel(), pmGc);
-
-        gc.fill = GridBagConstraints.HORIZONTAL;
-        gc.anchor = GridBagConstraints.NORTHWEST;
-        gc.weightx = 1;
-        gc.weighty = 0;
-        gc.gridwidth = 3;
-        gc.gridx = 0;
-        gc.gridy = 2;
-        panel.add(manipulations, gc);
-
-        gc.gridy = 3;
-        JPanel security = new JPanel(new GridBagLayout());
-        pmGc.gridx = 0;
-        security.add(createPermissionsPanel(), pmGc);
-        pmGc.gridx++;
-        security.add(createSigningPanel(), pmGc);
-
-        gc.fill = GridBagConstraints.HORIZONTAL;
-        gc.anchor = GridBagConstraints.NORTHWEST;
-        gc.gridy = 3;
-        panel.add(security, gc);
-
-        gcLabel.gridx = 0;
-        gcLabel.gridy = 3;
-
-        gc.gridx = 0;
-        gc.gridy = 4;
-        gc.fill = GridBagConstraints.HORIZONTAL;
-        gc.weightx = 0;
-        gc.gridwidth = 1;
-        panel.add(saveButton, gc);
-
-        gc.insets.bottom = 5;
-
-        gcLabel.gridy = gc.gridy + 1;
-        gcLabel.anchor = GridBagConstraints.SOUTHWEST;
-        gcLabel.weighty = 0.5;
-        gcLabel.gridwidth = 1;
-        gcLabel.fill = GridBagConstraints.BOTH;
-        panel.add(Box.createGlue(), gcLabel);
+        wirePageControls();
+        wireZoomControls();
+        wirePermissionControls();
+        wireSigningControls();
 
         browseButton.addActionListener(e -> doBrowsePdf());
         browseAppendButton.addActionListener(e -> runInBusy(() -> {
@@ -333,21 +400,16 @@ public class UI extends JSplitPane {
         saveButton.addActionListener(e -> doSave());
         splitDocument.addActionListener(e -> doSplit());
 
-        setLeftComponent(panel);
-        JScrollPane scrollPane = new JScrollPane(pages);
-        scrollPane.getViewport().setPreferredSize(new Dimension(charWith * 50, fm.getHeight() * 40));
-        setRightComponent(scrollPane);
+        add(createLayout(), BorderLayout.CENTER);
 
-        setDividerLocation(charWith * 65);
         updatePermissions();
         setSelectedPage(null);
 
         pages.addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent e) {
-                if (selectedPage != null) {
-                    quality.setText(String.format("%d dpi (x %.2f)", selectedPage.getPage().dpi, selectedPage.getScale()));
-                }
+                updatePageCounter();
+                updateZoomControls();
             }
         });
         renderQueue.start();
@@ -362,72 +424,408 @@ public class UI extends JSplitPane {
         );
     }
 
-    protected JPanel createSigningPanel() {
-        JPanel panel = new JPanel(new GridBagLayout());
+    /**
+     * Colored tabs on the left open the controls (document with signing and splitting, invoice, permissions) in a drawer
+     * beside them, one is always open (the document at the start), the pages are on the right. The tabs are described in {@link SideTabs}.
+     */
+    private JSplitPane createLayout() {
+        final FontMetrics fm = getFontMetrics(normalFont);
+        final int charWith = fm.charWidth('W');
 
-        GridBagConstraints gc = new GridBagConstraints();
-        gc.insets = new Insets(0, 5, 5, 5);
-        gc.gridx = 0;
-        gc.gridy = 0;
-        gc.gridwidth = 1;
-        gc.weightx = 0;
-        gc.weighty = 0;
-        gc.fill = GridBagConstraints.NONE;
-        gc.anchor = GridBagConstraints.NORTHWEST;
+        drawer = new TabDrawer();
+        drawer.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 5));
+        // The drawer grows if the open tabs need more room than the controls have (e.g. the standard of a loaded
+        // document is a longer text): the divider follows, nothing is cut off.
+        drawer.addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                SwingUtilities.invokeLater(() -> {
+                    if (splitPane != null)
+                        updateDivider();
+                });
+            }
+        });
+        // The document: the settings of the file (standard, compression), its information, and what is done with it as
+        // a whole: signing and splitting.
+        JPanel documentTab = new JPanel(new GridBagLayout());
+        GridBagConstraints dgc = new GridBagConstraints();
+        dgc.gridx = 0;
+        dgc.weightx = 1;
+        dgc.fill = GridBagConstraints.HORIZONTAL;
+        dgc.anchor = GridBagConstraints.NORTHWEST;
+        dgc.insets = new Insets(0, 0, 5, 0);
+        dgc.gridy = 0;
+        documentTab.add(new StandardPanel(this), dgc);
+        dgc.gridy = 1;
+        documentTab.add(new DocumentPanel(this), dgc);
+        dgc.gridy = 2;
+        documentTab.add(new BadgedBox(new SigningPanel(this), signingHelp), dgc);
+        dgc.gridy = 3;
+        documentTab.add(new SplitPanel(this), dgc);
+        drawer.addPanel(TAB_DOCUMENT, documentTab);
+        // The e-invoice: create or edit it and check it.
+        drawer.addPanel(TAB_INVOICE, new InvoicePanel(this));
+        // The editor uses the height of the window: the items table grows with it.
+        drawer.setFillsHeight(TAB_INVOICE);
+        drawer.addPanel(TAB_PERMISSIONS, new BadgedBox(new PermissionsPanel(this), permissionHelp));
 
-        JPanel signButtons = new JPanel(new GridBagLayout());
+        SideTabs tabs = new SideTabs(List.of(
+                new SideTabs.Spec(TAB_DOCUMENT, I18n.t("ui.tab.document"), "/svg/tab-document.svg", new Color(0x4A7FC1)),
+                new SideTabs.Spec(TAB_INVOICE, I18n.t("ui.tab.invoice"), "/svg/tab-invoice.svg", new Color(0x2E9C94)),
+                new SideTabs.Spec(TAB_PERMISSIONS, I18n.t("ui.tab.permissions"), "/svg/tab-permissions.svg", new Color(0xD9962B))));
+        drawer.setOpen(tabs.open());
+        // In a small window or with a big font the controls scroll, they are not cut off.
+        // The divider can't be moved over the controls: the scroll pane is not narrower than they need.
+        JScrollPane controlsScroll = new ProtectedScrollPane(drawer);
+        controlsScroll.setBorder(BorderFactory.createEmptyBorder());
+        controlsScroll.getVerticalScrollBar().setUnitIncrement(fm.getHeight());
+        JPanel drawerFrame = new JPanel(new BorderLayout());
+        drawerFrame.add(controlsScroll, BorderLayout.CENTER);
 
-        signButtons.add(sign, gc);
-        JButton browseSignature = new JButton(I18n.t("ui.selectP12"));
+        // Open, add and save are always in reach, also if all tabs are closed.
+        JPanel actionBar = new ActionBar(this);
+
+        // Below the drawer: the bar of the open tab that must stay in sight (the invoice tab has the buttons to apply
+        // the invoice), it is not scrolled away with the controls.
+        JPanel barHolder = new JPanel(new BorderLayout());
+        JPanel drawerArea = new JPanel(new BorderLayout());
+        drawerArea.add(drawerFrame, BorderLayout.CENTER);
+        drawerArea.add(barHolder, BorderLayout.SOUTH);
+
+        JPanel left = new JPanel(new BorderLayout());
+        left.add(tabs, BorderLayout.WEST);
+        left.add(drawerArea, BorderLayout.CENTER);
+        left.add(actionBar, BorderLayout.SOUTH);
+
+        // The margin of the window. On the split pane itself: its divider location counts from its outer edge.
+        // The divider has the background of the strips beside it (the action bar and the page tools), not the one of
+        // the window: it would show as a gap between them. The divider of FlatLaf is transparent, so the split pane
+        // paints the background behind it. The dividers of the other look and feels paint their own background, they
+        // are replaced, see StripSplitPaneUI.
+        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT) {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                if (!isFlatLaf())
+                    setUI(new StripSplitPaneUI());
+            }
+
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                if (getUI() instanceof javax.swing.plaf.basic.BasicSplitPaneUI basic) {
+                    Rectangle r = basic.getDivider().getBounds();
+                    g.setColor(SideTabs.stripBackground());
+                    g.fillRect(r.x, r.y, r.width, r.height);
+                }
+            }
+        };
+        split.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+        split.setLeftComponent(left);
+
+        // The tab of the invoice says what it does at the moment: create the invoice or edit the one of the document.
+        // The divider follows if the controls need more room (e.g. the editor was created), see updateDivider().
+        // The window follows: it can't be smaller than the controls and the pages need.
+        invoiceEditor.setModeListener(mode -> {
+            tabs.setBadge(TAB_INVOICE, switch (mode) {
+                case NONE -> null;
+                case CREATE -> I18n.t("ui.tab.invoice.create");
+                case EDIT -> I18n.t("ui.tab.invoice.edit");
+            });
+            SwingUtilities.invokeLater(() -> {
+                updateMinimumWindowSize();
+                updateDivider();
+            });
+        });
+        invoiceEditor.setShown(tabs.open().contains(TAB_INVOICE));
+
+        Runnable showDrawer = () -> {
+            // The line on top has the color of the tab that was opened last.
+            drawerFrame.setBorder(BorderFactory.createMatteBorder(3, 0, 0, 0, tabs.activeColor()));
+            drawer.setOpen(tabs.open());
+            invoiceEditor.setShown(tabs.open().contains(TAB_INVOICE));
+            barHolder.removeAll();
+            if (tabs.open().contains(TAB_INVOICE))
+                barHolder.add(invoiceEditor.saveBar(), BorderLayout.CENTER);
+            barHolder.revalidate();
+            barHolder.repaint();
+            left.revalidate();
+        };
+        showDrawer.run();
+        tabs.addChangeListener(() -> {
+            showDrawer.run();
+            // The divider stays where the user put it. It only moves if the open tabs need more room than that, and
+            // back if they need less again.
+            updateDivider();
+            SwingUtilities.invokeLater(this::updateMinimumWindowSize);
+        });
+
+        JScrollPane scrollPane = new JScrollPane(pages);
+        scrollPane.getViewport().setPreferredSize(new Dimension(charWith * 50, fm.getHeight() * 40));
+        // The window can't be made smaller than this for the pages: a usable preview.
+        scrollPane.setMinimumSize(new Dimension(charWith * 20, fm.getHeight() * 10));
+        // The selected page, the page count and the rotation are on top of the strip with the page tools.
+        JPanel pagesArea = new JPanel(new BorderLayout());
+        pagesArea.add(new PageToolsStrip(this), BorderLayout.WEST);
+        // Without a document the start page takes the place of the pages.
+        startPage = new StartPage(startCards());
+        pagesCards.add(startPage, CARD_START);
+        pagesCards.add(scrollPane, CARD_PAGES);
+        pagesArea.add(pagesCards, BorderLayout.CENTER);
+        split.setRightComponent(pagesArea);
+        // A bigger window gives the room to the pages, the controls keep their width.
+        split.setResizeWeight(0);
+        splitPane = split;
+        // As wide as the first tab needs, also with a big font, until the user chooses another width.
+        split.setDividerLocation(dividerTarget(0));
+        defaultDivider = split.getDividerLocation();
+        return split;
+    }
+
+    /**
+     * Sets up the zoom of the pages, see {@link PageToolsStrip}.
+     */
+    private void wireZoomControls() {
+        for (RoundSvgButton b : new RoundSvgButton[]{zoomInButton, zoomOutButton, zoomFitButton})
+            b.setOpaque(false);
+        zoomInButton.setToolTipText(I18n.t("zoom.in.tip"));
+        zoomInButton.addActionListener(e -> pages.setZoom(pages.nextZoom(true), null));
+        zoomOutButton.setToolTipText(I18n.t("zoom.out.tip"));
+        zoomOutButton.addActionListener(e -> pages.setZoom(pages.nextZoom(false), null));
+        zoomFitButton.setToolTipText(I18n.t("zoom.fitWidth.tip"));
+        zoomFitButton.addActionListener(e -> pages.setZoom(0, null));
+        // The strip is narrow: a smaller font for the percent.
+        zoomLabel.setFont(zoomLabel.getFont().deriveFont(zoomLabel.getFont().getSize2D() * 0.85f));
+        // Ctrl and the mouse wheel zoom in the pages, the buttons and the percent follow.
+        pages.addPropertyChangeListener("zoom", e -> updateZoomControls());
+        pages.addPropertyChangeListener("shownZoom", e -> updateZoomControls());
+        updateZoomControls();
+    }
+
+    /**
+     * Shows the zoom of the pages. Fitted, the percent changes with the width of the view and the selected page; the
+     * tooltip tells whether the pages are fitted.
+     */
+    private void updateZoomControls() {
+        // Without pages there is nothing to zoom; the zoom stays for the next document.
+        boolean hasPages = documentProxy != null && documentProxy.getPageCount() > 0;
+        int zoom = pages.getZoom();
+        int shown = hasPages ? pages.getShownZoom() : 0;
+        zoomLabel.setText(shown > 0 ? shown + " %" : " ");
+        zoomLabel.setEnabled(shown > 0);
+        zoomLabel.setToolTipText(shown <= 0 ? null : zoom > 0 ? zoom + " %" : I18n.t("zoom.fitted", shown));
+        zoomFitButton.setEnabled(hasPages && zoom != 0);
+        zoomOutButton.setEnabled(shown > 0 && pages.nextZoom(false) != zoom);
+        zoomInButton.setEnabled(shown > 0 && pages.nextZoom(true) != zoom);
+    }
+
+    /**
+     * Where the divider is: where the user put it (at the start: where it was at the start), but not left of what the
+     * open tabs need (also with a big font) and not so far right that the preview gets smaller than its minimum. The
+     * tabs that are not open don't count. So the divider only moves if a tab needs more room than that, and goes back
+     * if the next tab needs less.
+     *
+     * @param splitWidth The width of the split pane, 0 if it is not known yet.
+     */
+    private int dividerTarget(int splitWidth) {
+        Insets in = splitPane.getInsets();
+        int needed = neededDivider();
+        int target = Math.max(userDivider > 0 ? userDivider : defaultDivider, needed);
+        if (splitWidth > 0) {
+            int most = splitWidth - in.right - splitPane.getDividerSize()
+                    - splitPane.getRightComponent().getMinimumSize().width;
+            target = Math.min(target, most);
+        }
+        return Math.max(target, needed);
+    }
+
+    /**
+     * Moves the divider to where it belongs, see {@link #dividerTarget(int)}. Call it if the open tabs or their content
+     * changed.
+     */
+    private void updateDivider() {
+        if (!drawer.isOpen(TAB_INVOICE))
+            defaultDivider = Math.max(defaultDivider, neededDivider());
+        moveDivider(dividerTarget(splitPane.getWidth()));
+    }
+
+    /**
+     * @return The place of the divider that gives the open tabs the room they need.
+     */
+    private int neededDivider() {
+        return splitPane.getLeftComponent().getPreferredSize().width + splitPane.getInsets().left;
+    }
+
+    /**
+     * Moves the divider. The pages are as wide as the preview, so they are scaled: the part of the document at the top
+     * stays at the top, and the move is animated (not if the user wants reduced motion): the controls slide in and out,
+     * the preview doesn't jump.
+     */
+    private void moveDivider(int target) {
+        // The move is already on its way (each step changes the size of the controls, which asks for the divider again).
+        if (dividerAnimation != null && dividerAnimation.isRunning() && dividerMovesTo == target)
+            return;
+        if (dividerAnimation != null)
+            dividerAnimation.stop();
+        final int from = splitPane.getDividerLocation();
+        if (from == target) {
+            // Also ends the hold of a move that was stopped.
+            SwingUtilities.invokeLater(pages::releasePosition);
+            return;
+        }
+        dividerMovesTo = target;
+        pages.holdPosition();
+        boolean still = !splitPane.isShowing() || Preferences.getInstance().getBoolean(
+                Preferences.USER_PREF_REDUCED_MOTION, Preferences.USER_PREF_REDUCED_MOTION_DEFAULT);
+        if (still) {
+            setDivider(target);
+            // After the layout that follows.
+            SwingUtilities.invokeLater(pages::releasePosition);
+            return;
+        }
+        final long start = System.nanoTime();
+        final javax.swing.Timer timer = new javax.swing.Timer(15, null);
+        timer.addActionListener(e -> {
+            double t = Math.min(1.0, (System.nanoTime() - start) / (DIVIDER_MOVE_MS * 1_000_000.0));
+            // Fast at the start, slow at the end.
+            double eased = 1 - (1 - t) * (1 - t) * (1 - t);
+            setDivider((int) Math.round(from + (target - from) * eased));
+            if (t >= 1.0) {
+                timer.stop();
+                SwingUtilities.invokeLater(pages::releasePosition);
+            }
+        });
+        dividerAnimation = timer;
+        timer.start();
+    }
+
+    private void setDivider(int location) {
+        adjustingDivider = true;
+        try {
+            splitPane.setDividerLocation(location);
+        } finally {
+            adjustingDivider = false;
+        }
+    }
+
+    // ---------------------------------------------------------------- size of the window
+
+    /**
+     * The size of the window if nothing is stored: half of the usable screen, but not smaller than the controls need.
+     *
+     * @param usable The usable area of the screen (without the task bar).
+     * @param min    The minimum size of the window.
+     */
+    static Dimension defaultWindowSize(Rectangle usable, Dimension min) {
+        return fitWindowSize(usable.width / 2, (int)(usable.height * 0.75), usable, min);
+    }
+
+    /**
+     * The stored size of the window, or the default size if nothing is stored (a width or height of 0 or less).
+     */
+    static Dimension restoredWindowSize(int width, int height, Rectangle usable, Dimension min) {
+        if (width <= 0 || height <= 0)
+            return defaultWindowSize(usable, min);
+        return fitWindowSize(width, height, usable, min);
+    }
+
+    /**
+     * Not smaller than the minimum and not bigger than the screen. The screen wins if it is smaller than the minimum.
+     */
+    private static Dimension fitWindowSize(int width, int height, Rectangle usable, Dimension min) {
+        return new Dimension(Math.min(Math.max(width, min.width), usable.width),
+                Math.min(Math.max(height, min.height), usable.height));
+    }
+
+    /**
+     * Sets size, state and divider of the window before it is shown, from the preferences or, if nothing is stored
+     * there, half of the usable screen. After that the changes of the user are stored. Call it after the window is packed
+     * and its minimum size is set, see {@link #updateMinimumWindowSize()}.
+     */
+    private void applyWindowState(JFrame frame) {
+        Preferences prefs = Preferences.getInstance();
+        Rectangle usable = GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
+        Dimension size = restoredWindowSize(prefs.getInt(Preferences.USER_PREF_WINDOW_WIDTH, 0),
+                prefs.getInt(Preferences.USER_PREF_WINDOW_HEIGHT, 0), usable, frame.getMinimumSize());
+        frame.setSize(size);
+        // The position is not stored: the window is in the middle of the screen, it can't be off the screen.
+        frame.setLocationRelativeTo(null);
+        boolean maximized = prefs.getBoolean(Preferences.USER_PREF_WINDOW_MAXIMIZED, false);
+        if (maximized)
+            frame.setExtendedState(Frame.MAXIMIZED_BOTH);
+
+        // The divider the user chose last time, see dividerTarget(). The split pane has the width of the window, it
+        // has no size yet.
+        userDivider = prefs.getInt(Preferences.USER_PREF_DIVIDER, 0);
+        Insets frameInsets = frame.getInsets();
+        setDivider(dividerTarget((maximized ? usable.width : size.width) - frameInsets.left - frameInsets.right));
+
+        storedWidth = size.width;
+        storedHeight = size.height;
+        storedMaximized = maximized;
+        storedDivider = userDivider;
+        // Not for each pixel of a drag: the preferences are the registry on Windows.
+        windowStateTimer = new javax.swing.Timer(500, e -> saveWindowState());
+        windowStateTimer.setRepeats(false);
+        frame.addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                // A narrow window pushed the divider to the left (see below): it goes back to where the user put it
+                // if there is room again. Without animation, the window is being resized.
+                SwingUtilities.invokeLater(() -> {
+                    int target = dividerTarget(splitPane.getWidth());
+                    if (target != splitPane.getDividerLocation() && (dividerAnimation == null || !dividerAnimation.isRunning()))
+                        setDivider(target);
+                });
+                windowStateTimer.restart();
+            }
+        });
+        splitPane.addPropertyChangeListener(JSplitPane.DIVIDER_LOCATION_PROPERTY, e -> {
+            // Only a drag of the user counts. Not a move of the program, and not the one of the split pane itself: a
+            // window that gets narrow pushes the divider to the left, that is where dividerTarget() puts it, too.
+            if (!adjustingDivider && splitPane.getDividerLocation() != dividerTarget(splitPane.getWidth())) {
+                userDivider = splitPane.getDividerLocation();
+                windowStateTimer.restart();
+            }
+        });
+    }
+
+    /**
+     * Stores what the user changed: the size of the window (not while it is maximized, the size is the one of the
+     * screen then), if it is maximized, and where the user put the divider (see {@link #userDivider}). It is also called
+     * before the program exits or restarts, so the last change is not lost to the delay.
+     */
+    private void saveWindowState() {
+        if (!(SwingUtilities.getWindowAncestor(this) instanceof JFrame frame) || !frame.isShowing() || splitPane == null)
+            return;
+        Preferences prefs = Preferences.getInstance();
+        boolean maximized = (frame.getExtendedState() & Frame.MAXIMIZED_BOTH) == Frame.MAXIMIZED_BOTH;
+        if (maximized != storedMaximized) {
+            prefs.set(Preferences.USER_PREF_WINDOW_MAXIMIZED, maximized);
+            storedMaximized = maximized;
+        }
+        if (userDivider > 0 && userDivider != storedDivider) {
+            prefs.set(Preferences.USER_PREF_DIVIDER, userDivider);
+            storedDivider = userDivider;
+        }
+        Dimension size = frame.getSize();
+        if (!maximized && (size.width != storedWidth || size.height != storedHeight)) {
+            prefs.set(Preferences.USER_PREF_WINDOW_WIDTH, size.width);
+            prefs.set(Preferences.USER_PREF_WINDOW_HEIGHT, size.height);
+            storedWidth = size.width;
+            storedHeight = size.height;
+        }
+    }
+
+    /**
+     * Sets up the signing controls, see {@link SigningPanel}.
+     */
+    private void wireSigningControls() {
         browseSignature.addActionListener(e -> doBrowseSignatureFile());
-        gc.gridx = 1;
-        gc.fill = GridBagConstraints.HORIZONTAL;
-        gc.weightx = 1;
-        signButtons.add(browseSignature, gc);
-
-        gc.gridwidth = 2;
-        gc.gridx = 0;
-        panel.add(signButtons, gc);
-
-        gc.fill = GridBagConstraints.NONE;
-        gc.weightx = 0;
-        gc.gridy = 1;
-        gc.gridwidth = 1;
-        JLabel label = new JLabel(I18n.t("ui.keyFile"));
-        panel.add(label, gc);
-        gc.gridy++;
-        label = new JLabel(I18n.t("ui.password"));
-        label.setLabelFor(signaturePasswordField);
-        panel.add(label, gc);
-
-        gc.fill = GridBagConstraints.HORIZONTAL;
-        gc.weightx = 1;
-        gc.gridy = 1;
-        gc.gridx = 1;
-        panel.add(signatureKeyFileName, gc);
-        gc.gridy++;
 
         signaturePasswordField.setText(getPref(Preferences.USER_PREF_SIG_PASSWORD, ""));
-        panel.add(signaturePasswordField, gc);
 
-        signingHelp.addActionListener(e -> JOptionPane.showMessageDialog(this,
-                I18n.t("help.signing.text"), "Help", JOptionPane.INFORMATION_MESSAGE));
-
-        gc.fill = GridBagConstraints.NONE;
-        gc.anchor = GridBagConstraints.NORTHEAST;
-        gc.gridy++;
-        panel.add(signingHelp, gc);
-
-
-        gc.anchor = GridBagConstraints.NORTHWEST;
-        gc.fill = GridBagConstraints.BOTH;
-        gc.gridwidth = 2;
-        gc.weighty = 1;
-        gc.gridx = 0;
-        gc.gridy++;
-        panel.add(Box.createGlue(), gc);
-
-        panel.setBorder(BorderFactory.createTitledBorder(I18n.t("ui.border.signing")));
+        signingHelp.addActionListener(e -> HelpDialog.show(this, "help.signing.text", true));
 
         Preferences prefs = Preferences.getInstance();
 
@@ -435,90 +833,25 @@ public class UI extends JSplitPane {
         this.sign.setSelected(prefs.getBoolean(Preferences.USER_PREF_SIG_ENABLED, false));
 
         this.sign.addActionListener(e -> Preferences.getInstance().set(Preferences.USER_PREF_SIG_ENABLED, this.sign.isSelected()));
-
-        return panel;
     }
 
-    protected JPanel createPermissionsPanel() {
-        JPanel panel = new JPanel(new GridBagLayout());
-
-        permissionHelp.addActionListener(e -> JOptionPane.showMessageDialog(this,
-                I18n.t("help.permissions.text"),
-                I18n.t("common.help"), JOptionPane.INFORMATION_MESSAGE));
+    /**
+     * Sets up the password, compression and permission controls, see {@link PermissionsPanel}.
+     */
+    private void wirePermissionControls() {
+        permissionHelp.addActionListener(e -> HelpDialog.show(this, "help.permissions.text", true));
 
         compression.setSelected(true);
         allowPrinting.setSelected(true);
-        saveButton.setEnabled(false);
-        saveButton.setFont(normalFont.deriveFont(Font.BOLD, normalFont.getSize2D() * 1.5f));
-        browseAppendButton.setEnabled(false);
-        splitDocument.setEnabled(false);
-        rotation.setEditable(false);
-
-        JLabel ownerPasswordLabel = new JLabel(I18n.t("ui.ownerPassword"));
-        ownerPasswordLabel.setLabelFor(ownerPasswordField);
-
-        JLabel userPasswordLabel = new JLabel(I18n.t("ui.userPassword"));
-        userPasswordLabel.setLabelFor(userPasswordField);
-
-        GridBagConstraints gcLabel = new GridBagConstraints();
-        gcLabel.anchor = GridBagConstraints.NORTHWEST;
-        gcLabel.fill = GridBagConstraints.NONE;
-        gcLabel.insets = new Insets(0, 5, 5, 5);
-
-        GridBagConstraints gc = new GridBagConstraints();
-        gc.insets = new Insets(0, 0, 5, 5);
-        gc.gridx = 0;
-        gc.gridy = 0;
-        gc.gridwidth = 3;
-        gc.weightx = 1;
-        gc.weighty = 0;
-        gc.fill = GridBagConstraints.HORIZONTAL;
-        gc.anchor = GridBagConstraints.NORTHWEST;
-
-        gcLabel.gridx = 0;
-        gcLabel.gridy = 3;
-        panel.add(ownerPasswordLabel, gcLabel);
-
-        gc.gridy = 4;
-        gc.gridwidth = 1;
-        panel.add(ownerPasswordField, gc);
-        gc.gridx = 1;
-        gc.weightx = 0;
-        panel.add(generateOwner, gc);
-        gcLabel.gridy += 2;
-        panel.add(userPasswordLabel, gcLabel);
-        gc.weightx = 1;
-        gc.gridwidth = 2;
-        gc.gridx = 0;
-        gc.gridy += 2;
-        panel.add(userPasswordField, gc);
-
-        JPanel permissions = new JPanel(new GridLayout(4, 2));
-
-        permissions.add(compression);
-        permissions.add(allowPrinting);
-        permissions.add(allowModification);
-        permissions.add(allowAnnotations);
-        permissions.add(allowExtraction);
-        permissions.add(allowFillIn);
-        permissions.add(allowAssembly);
-
-        gc.weightx = 1;
-        gc.gridx = 0;
-        gc.gridy++;
-        gc.gridwidth = 1;
-        gc.fill = GridBagConstraints.HORIZONTAL;
-        panel.add(permissions, gc);
-
-        gc.gridx = 1;
-        gc.weightx = 0;
-        gc.fill = GridBagConstraints.NONE;
-        panel.add(permissionHelp, gc);
 
         allowAnnotations.addItemListener(e -> SwingUtilities.invokeLater(this::updatePermissions));
         String ownerPassword = null;
 
         Preferences prefs = Preferences.getInstance();
+        generateOwner.setToolTipText(I18n.t("ui.generateOwner.tip"));
+        generateOwner.setBorderPainted(false);
+        generateOwner.setOpaque(false);
+        generateOwner.setFocusPainted(false);
         generateOwner.addActionListener(e -> ownerPasswordField.setText(UUID.randomUUID().toString()));
         if (prefs.getBoolean(Preferences.USER_PREF_STORE_PASSWORDS, false)) {
             ownerPassword = prefs.getString(Preferences.USER_PREF_OWNER_PASSWORD, null);
@@ -548,18 +881,12 @@ public class UI extends JSplitPane {
 
         ownerPasswordField.getDocument().addDocumentListener(passwordChecker);
         userPasswordField.getDocument().addDocumentListener(passwordChecker);
-
-        panel.setBorder(BorderFactory.createTitledBorder(I18n.t("ui.border.permissions")));
-
-        return panel;
     }
 
-    protected JPanel createDocumentPanel() {
-        JPanel documentPanel = new JPanel(new GridBagLayout());
-        documentPanel.setBorder(BorderFactory.createTitledBorder(I18n.t("ui.border.document")));
-
-        JPanel browseButtons = new JPanel(new FlowLayout(FlowLayout.TRAILING, 5, 0));
-
+    /**
+     * Sets up the document controls: open and add files (see {@link ActionBar}), standard and compression (see {@link StandardPanel}), document information (see {@link DocumentPanel}).
+     */
+    private void wireDocumentControls() {
         browseButton.setToolTipText(I18n.t("ui.browse.tip"));
         new DropTarget(browseButton, new DropTargetAdapter() {
             @Override
@@ -576,71 +903,38 @@ public class UI extends JSplitPane {
             }
         });
 
+        // Dropped on the rest of the window: the first document is opened, later ones are added, nothing is replaced.
+        // The buttons above replace the document, they keep their own targets.
+        new DropTarget(this, new DropTargetAdapter() {
+            @Override
+            public void drop(DropTargetDropEvent dtde) {
+                handleDrop(dtde, true);
+            }
+        });
+
         browseButton.setOpaque(false);
         browseAppendButton.setOpaque(false);
+        invoiceDetailsButton.setToolTipText(I18n.t("ui.invoice.details.tip"));
+        invoiceDetailsButton.addActionListener(e -> invoiceActions.doShowValidationDetails());
+        invoiceDetailsButton.setVisible(false);
+        validatePdfaButton.setToolTipText(I18n.t("menu.validation.pdfa.tip"));
+        validatePdfaButton.addActionListener(e -> invoiceActions.doValidatePdfa());
+        invoiceHelp.setToolTipText(I18n.t("common.help"));
+        invoiceHelp.addActionListener(e -> HelpDialog.show(this, "help.invoice.text", true));
+        // The invoice needs PDF/A-3: the locked editor offers the dialog of the standard.
+        invoiceEditor.setConvertAction(() -> doChangeStandard(documentProxy == null || documentProxy.getDocument() == null
+                ? PdfStandardProfile.PDFA_3B : PdfStandard.pdfa3Level(documentProxy.getDocument())));
+        invoiceActions.documentChanged(documentProxy,  true);
 
-        browseButtons.add(browseButton);
-        browseButtons.add(browseAppendButton);
-
-        pageCount.setEditable(false);
-        pageCount.setText("0");
-
-        GridBagConstraints gc = new GridBagConstraints();
-        gc.insets = new Insets(0, 5, 5, 5);
-        gc.gridx = 0;
-        gc.gridy = 0;
-        gc.gridwidth = 1;
-        gc.gridheight = 1;
-        gc.fill = GridBagConstraints.NONE;
-        gc.anchor = GridBagConstraints.WEST;
-
-        JLabel pageCountLabel = new JLabel(I18n.t("ui.pages"));
-        pageCountLabel.setLabelFor(pageCount);
-        documentPanel.add(pageCountLabel, gc);
-
-        gc.gridx = 1;
-        gc.weightx = 1;
         pdfStandard.setFont(hintFont);
         pdfStandard.setToolTipText(I18n.t("ui.pdfStandard.tip"));
-        JPanel pageCountRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        pageCountRow.setOpaque(false);
-        pageCountRow.add(pageCount);
-        pageCountRow.add(Box.createHorizontalStrut(10));
         standardButton.setEnabled(false);
         standardButton.setToolTipText(I18n.t("ui.standardButton.tip"));
         standardButton.addActionListener(e -> doChangeStandard());
-        pageCountRow.add(standardButton);
-        pageCountRow.add(Box.createHorizontalStrut(10));
-        pageCountRow.add(pdfStandard);
-        documentPanel.add(pageCountRow, gc);
 
-        gc.gridy++;
-        gc.gridx = 0;
-        gc.gridwidth = 2;
-        gc.weightx = 1;
-        statusMessage.setFont(hintFont);
-        documentPanel.add(statusMessage, gc);
-
-        gc.gridy = 0;
-        gc.gridx = 2;
-        gc.anchor = GridBagConstraints.NORTHEAST;
-        gc.gridwidth = 1;
-        gc.weighty = 0;
-        gc.weightx = 0;
-        gc.gridheight = 2;
-        documentPanel.add(browseButtons, gc);
-
-        gc.gridheight = 1;
-        gc.anchor = GridBagConstraints.WEST;
-        gc.gridx = 0;
-        gc.gridy = 1;
-        gc.weightx = 0;
-        gc.gridwidth = 2;
-
-        JPanel docButtons = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        docButtons.add(useDocumentInformation);
-        docButtons.add(clearInformation);
-        documentPanel.add(docButtons, gc);
+        exportXmp.setToolTipText(I18n.t("ui.exportXmp.tip"));
+        exportXmp.setEnabled(false);
+        exportXmp.addActionListener(e -> doExportXmp());
 
         useDocumentInformation.setSelected(true);
         initDocumentInformation();
@@ -660,131 +954,21 @@ public class UI extends JSplitPane {
                 keywords.setText("");
             });
         });
-
-        gc.gridy++;
-        gc.gridwidth = 1;
-
-        JLabel titleLabel = new JLabel(I18n.t("info.title"));
-        titleLabel.setLabelFor(title);
-        documentPanel.add(titleLabel, gc);
-        gc.gridwidth = 2;
-        gc.fill = GridBagConstraints.HORIZONTAL;
-        gc.weightx = 1;
-        gc.gridx = 1;
-        documentPanel.add(title, gc);
-
-        gc.gridwidth = 1;
-        gc.weightx = 0;
-        gc.gridx = 0;
-        gc.gridy++;
-        JLabel authorLabel = new JLabel(I18n.t("info.author"));
-        authorLabel.setLabelFor(author);
-        documentPanel.add(authorLabel, gc);
-        gc.fill = GridBagConstraints.HORIZONTAL;
-        gc.weightx = 1;
-        gc.gridx = 1;
-        gc.gridwidth = 2;
-        documentPanel.add(author, gc);
-
-        gc.gridy++;
-        JLabel creatorLabel = new JLabel(I18n.t("info.creator"));
-        creatorLabel.setLabelFor(creator);
-        gc.weightx = 0;
-        gc.gridx = 0;
-        gc.gridy++;
-        gc.gridwidth = 1;
-        documentPanel.add(creatorLabel, gc);
-        gc.weightx = 1;
-        gc.gridx = 1;
-        gc.gridwidth = 2;
-        documentPanel.add(creator, gc);
-
-        gc.gridy++;
-        JLabel producerLabel = new JLabel(I18n.t("info.producer"));
-        producerLabel.setLabelFor(producer);
-        gc.weightx = 0;
-        gc.gridx = 0;
-        gc.gridy++;
-        gc.gridwidth = 1;
-        documentPanel.add(producerLabel, gc);
-        gc.weightx = 1;
-        gc.gridx = 1;
-        gc.gridwidth = 2;
-        documentPanel.add(producer, gc);
-
-
-        gc.gridy++;
-        JLabel subjectLabel = new JLabel(I18n.t("info.subject"));
-        subjectLabel.setLabelFor(subject);
-        gc.weightx = 0;
-        gc.gridx = 0;
-        gc.gridwidth = 1;
-        documentPanel.add(subjectLabel, gc);
-        gc.weightx = 1;
-        gc.gridx = 1;
-        gc.gridwidth = 2;
-        documentPanel.add(subject, gc);
-
-        gc.gridy++;
-        JLabel keywordsLabel = new JLabel(I18n.t("info.keywords"));
-        keywordsLabel.setLabelFor(keywords);
-        gc.weightx = 0;
-        gc.gridx = 0;
-        gc.gridwidth = 1;
-        documentPanel.add(keywordsLabel, gc);
-        gc.weightx = 1;
-        gc.gridx = 1;
-        gc.gridwidth = 2;
-        documentPanel.add(keywords, gc);
-
-
-        return documentPanel;
     }
 
-    protected JPanel createSplitterPanel() {
-        JPanel splitter = new JPanel(new GridBagLayout());
-        GridBagConstraints gc = new GridBagConstraints();
-        gc.anchor = GridBagConstraints.NORTHWEST;
-        gc.insets = new Insets(0, 5, 5, 5);
-        gc.gridx = 0;
-        gc.gridy = 0;
-        gc.gridwidth = 1;
-        gc.weightx = 0;
-        gc.weighty = 0;
-
-        JLabel pagesLabel = new JLabel(I18n.t("ui.pageCount"));
-        pagesLabel.setLabelFor(pagesPerDocument);
-        splitter.add(pagesLabel, gc);
-        gc.gridx++;
-        splitter.add(pagesPerDocument, gc);
-
-        gc.fill = GridBagConstraints.BOTH;
-        gc.weightx = 1;
-        gc.gridx = 0;
-        gc.gridy++;
-        gc.gridwidth = 2;
-        splitter.add(Box.createGlue(), gc);
-
-        gc.fill = GridBagConstraints.NONE;
-        gc.weightx = 0;
-        gc.gridy++;
-        splitter.add(splitDocument, gc);
-
-        splitter.setBorder(BorderFactory.createTitledBorder(I18n.t("ui.border.splitting")));
-        return splitter;
-    }
-
-    protected JPanel createPageManipulationPanel() {
+    /**
+     * Sets up the buttons for the selected page, see {@link PageToolsStrip}.
+     */
+    private void wirePageControls() {
+        deleteButton.setSymbolColor("Actions.Red", new Color(0xC0504D));
         deleteButton.setOpaque(false);
         deleteButton.setToolTipText(I18n.t("ui.delete.tip"));
         deleteButton.addActionListener(e -> doDeletePage());
 
-        renderToImageButton.setOpaque(false);
         renderToImageButton.setToolTipText(I18n.t("ui.toImage.tip"));
         renderToImageButton.addActionListener(e -> doRenderToImage());
 
         renderAllToImageButton.setEnabled(false);
-        renderAllToImageButton.setOpaque(false);
         renderAllToImageButton.setToolTipText(I18n.t("ui.allToImages.tip"));
         renderAllToImageButton.addActionListener(e -> {
             if (imagesAllowed())
@@ -805,13 +989,21 @@ public class UI extends JSplitPane {
         rotateAllClockwiseButton.setToolTipText(I18n.t("ui.rotateAll.tip"));
         rotateAllClockwiseButton.addActionListener(e -> runInBusy(this::doRotateAllClockwise));
 
-        moveLeft.setOpaque(false);
-        moveLeft.setToolTipText(I18n.t("ui.moveLeft.tip"));
-        moveLeft.addActionListener(e -> doMoveLeft());
+        moveUp.setOpaque(false);
+        moveUp.setToolTipText(I18n.t("ui.moveUp.tip"));
+        moveUp.addActionListener(e -> doMoveUp());
 
-        moveRight.setOpaque(false);
-        moveRight.setToolTipText(I18n.t("ui.moveRight.tip"));
-        moveRight.addActionListener(e -> doMoveRight());
+        moveDown.setOpaque(false);
+        moveDown.setToolTipText(I18n.t("ui.moveDown.tip"));
+        moveDown.addActionListener(e -> doMoveDown());
+
+        previousPageButton.setOpaque(false);
+        previousPageButton.setToolTipText(I18n.t("ui.previousPage.tip"));
+        previousPageButton.addActionListener(e -> showPage(pages.getSelectedPageIndex()));
+
+        nextPageButton.setOpaque(false);
+        nextPageButton.setToolTipText(I18n.t("ui.nextPage.tip"));
+        nextPageButton.addActionListener(e -> showPage(pages.getSelectedPageIndex() + 2));
 
         exportImages.setToolTipText(I18n.t("ui.exportImages.tip"));
         exportImages.addActionListener(e -> {
@@ -821,71 +1013,20 @@ public class UI extends JSplitPane {
             }
         });
 
-        JPanel pageManipulation = new JPanel(new GridBagLayout());
-        GridBagConstraints gc = new GridBagConstraints();
-        gc.anchor = GridBagConstraints.WEST;
-        gc.insets = new Insets(0, 5, 5, 5);
-        gc.gridx = 0;
-        gc.gridy = 0;
-        gc.gridwidth = 2;
-        gc.weightx = 0;
-        pageManipulation.add(pageNb, gc);
-        gc.gridwidth = 1;
-        gc.gridy++;
-        JLabel rotationLabel = new JLabel(I18n.t("ui.rotation"));
-        rotationLabel.setLabelFor(rotation);
-        pageManipulation.add(rotationLabel, gc);
-        gc.gridx = 1;
-        pageManipulation.add(rotation, gc);
+        imagesMenu.add(renderToImageButton);
+        imagesMenu.add(renderAllToImageButton);
+        imagesMenu.addSeparator();
+        imagesMenu.add(exportImages);
+        imagesButton.setToolTipText(I18n.t("ui.images.tip"));
+        imagesButton.addActionListener(e -> imagesMenu.show(imagesButton, imagesButton.getWidth(), 0));
+        // The button is usable if the menu has something to do.
+        imagesButton.setEnabled(false);
+        PropertyChangeListener updateImagesButton = e -> imagesButton.setEnabled(renderToImageButton.isEnabled()
+                || renderAllToImageButton.isEnabled() || exportImages.isEnabled());
+        renderToImageButton.addPropertyChangeListener("enabled", updateImagesButton);
+        renderAllToImageButton.addPropertyChangeListener("enabled", updateImagesButton);
+        exportImages.addPropertyChangeListener("enabled", updateImagesButton);
 
-        gc.gridy++;
-        gc.gridx = 0;
-        gc.gridwidth = 2;
-        pageManipulation.add(quality, gc);
-
-        gc.gridwidth = 3;
-        gc.gridx = 2;
-        gc.gridy = 0;
-        gc.fill = GridBagConstraints.NONE;
-
-        JPanel toImageButtons = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        toImageButtons.setOpaque(false);
-        toImageButtons.add(renderToImageButton);
-        toImageButtons.add(Box.createHorizontalStrut(5));
-        toImageButtons.add(renderAllToImageButton);
-
-        pageManipulation.add(toImageButtons, gc);
-
-        gc.gridwidth = 1;
-        gc.gridy++;
-        gc.gridx = 2;
-        pageManipulation.add(rotateClockwiseButton, gc);
-        gc.gridx++;
-        pageManipulation.add(rotateAllClockwiseButton, gc);
-
-        gc.gridy++;
-        gc.gridx = 5;
-        pageManipulation.add(deleteButton, gc);
-        gc.gridx = 2;
-        pageManipulation.add(moveLeft, gc);
-        gc.gridx++;
-        pageManipulation.add(moveRight, gc);
-
-        gc.gridx = 5;
-        gc.gridy = 0;
-        gc.gridheight = 2;
-        gc.anchor = GridBagConstraints.NORTH;
-        pageManipulation.add(exportImages, gc);
-
-        gc.gridx = 4;
-        gc.gridy = 2;
-        gc.gridwidth = 1;
-        gc.gridheight = 1;
-        gc.anchor = GridBagConstraints.NORTHEAST;
-        pageManipulation.add(redactButton, gc);
-
-        pageManipulation.setBorder(BorderFactory.createTitledBorder(I18n.t("ui.border.pages")));
-        return pageManipulation;
     }
 
     private final JRadioButtonMenuItem encryptionKeyLength40 = new JRadioButtonMenuItem("40-Bit");
@@ -898,8 +1039,11 @@ public class UI extends JSplitPane {
     private final JRadioButtonMenuItem lafSystem = new JRadioButtonMenuItem(I18n.t("laf.system"));
     private final JRadioButtonMenuItem lafCross = new JRadioButtonMenuItem(I18n.t("laf.cross"));
 
-    private final JCheckBox storePasswords = new JCheckBox(I18n.t("ui.storePasswords"));
-    private final JCheckBox confirmExit = new JCheckBox(I18n.t("ui.confirmExit"));
+    private final JPrefCheckBoxMenuItem reducedMotion = new JPrefCheckBoxMenuItem(I18n.t("menu.reducedMotion"),
+            Preferences.USER_PREF_REDUCED_MOTION, Preferences.USER_PREF_REDUCED_MOTION_DEFAULT);
+
+    private final JCheckBoxMenuItem storePasswords = new JCheckBoxMenuItem(I18n.t("ui.storePasswords"));
+    private final JCheckBoxMenuItem confirmExit = new JCheckBoxMenuItem(I18n.t("ui.confirmExit"));
 
     private final JPrefCheckBoxMenuItem viewQualityAA
             = new JPrefCheckBoxMenuItem("Antialiasing", Preferences.USER_PREF_VIEWER_ANTIALIASING,
@@ -916,6 +1060,33 @@ public class UI extends JSplitPane {
             "Rendering for quality", Preferences.USER_PREF_VIEWER_RENDER_QUALITY, false, true);
 
     private JMenuBar menuBar;
+
+    /**
+     * Makes a button the main button of a window: filled with the accent color of the look and feel, white text.
+     * FlatLaf fills a default button only in the dark theme, and a default button of the window is no option: Enter in
+     * a text field would press it. Other look and feels keep the normal look. Call it again after
+     * the look and feel changed, the colors are set now.
+     */
+    static void setPrimary(javax.swing.AbstractButton button) {
+        Color accent = UIManager.getColor("Component.accentColor");
+        if (!isFlatLaf() || accent == null) {
+            button.putClientProperty(FlatClientProperties.STYLE, null);
+            return;
+        }
+        // Lighter on dark themes, darker on light ones.
+        boolean dark = SideTabs.textOn(UIManager.getColor("Panel.background")) == Color.WHITE;
+        Color toward = dark ? Color.WHITE : Color.BLACK;
+        String hover = hex(SideTabs.mix(accent, toward, 0.12));
+        String pressed = hex(SideTabs.mix(accent, toward, 0.24));
+        String fill = hex(accent);
+        button.putClientProperty(FlatClientProperties.STYLE, "background: " + fill + "; foreground: #FFFFFF; "
+                + "focusedBackground: " + fill + "; hoverBackground: " + hover + "; pressedBackground: " + pressed + "; "
+                + "borderColor: " + fill + "; hoverBorderColor: " + hover + "; pressedBorderColor: " + pressed);
+    }
+
+    private static String hex(Color c) {
+        return String.format("#%02X%02X%02X", c.getRed(), c.getGreen(), c.getBlue());
+    }
 
     public static boolean isFlatLaf() {
         return UIManager.getLookAndFeel() instanceof FlatLaf;
@@ -936,17 +1107,28 @@ public class UI extends JSplitPane {
                     SwingUtilities.updateComponentTreeUI(signatureChooser);
                 SwingUtilities.updateComponentTreeUI(mergeOptions);
                 Preferences.getInstance().set(Preferences.USER_PREF_LAF, laf);
-                permissionHelp.setOpaque(false);
-                permissionHelp.setIcon(UIManager.getIcon(HELP_ICON_NAME));
-                signingHelp.setOpaque(false);
-                signingHelp.setIcon(UIManager.getIcon(HELP_ICON_NAME));
-                normalFont = UIManager.getFont("Panel.font");
-                hintFont = normalFont.deriveFont(Font.ITALIC);
-                saveButton.setFont(normalFont.deriveFont(Font.BOLD, normalFont.getSize2D() * 1.5f));
-                statusMessage.setFont(hintFont);
-                setSelectedPage(selectedPage);
-                SwingUtilities.getWindowAncestor(this).pack();
-                Log.info("Switched to %s", laf);
+                // FlatLaf.updateUILater() updates the windows later (it is queued before this): what needs the
+                // new fonts, colors and sizes (pack, minimum size) has to wait for it.
+                SwingUtilities.invokeLater(() -> {
+                    normalFont = UIManager.getFont("Panel.font");
+                    hintFont = normalFont.deriveFont(Font.ITALIC);
+                    saveButton.setFont(normalFont.deriveFont(Font.BOLD, normalFont.getSize2D() * 1.5f));
+                    setPrimary(saveButton);
+                    setSelectedPage(selectedPage);
+                    Window window = SwingUtilities.getWindowAncestor(this);
+                    if (window instanceof Frame frame && (frame.getExtendedState() & Frame.MAXIMIZED_BOTH) == Frame.MAXIMIZED_BOTH) {
+                        window.validate();
+                    } else if (window != null) {
+                        // The new fonts may need more room, but the window keeps the size the user gave it.
+                        Dimension before = window.getSize();
+                        window.pack();
+                        window.setSize(Math.max(before.width, window.getWidth()), Math.max(before.height, window.getHeight()));
+                    }
+                    updateMinimumWindowSize();
+                    // The controls need more or less room with other fonts.
+                    updateDivider();
+                    Log.info("Switched to %s", laf);
+                });
             }
         } catch (Exception e) {
             System.err.println("Failed to switch LAF to " + laf);
@@ -1059,6 +1241,8 @@ public class UI extends JSplitPane {
             options.add(laf);
             options.add(createLanguageMenu());
             options.add(renderQuality);
+            reducedMotion.setToolTipText(I18n.t("menu.reducedMotion.tip"));
+            options.add(reducedMotion);
             options.add(redactionColor);
 
             if (Log.isDebug()) {
@@ -1083,10 +1267,11 @@ public class UI extends JSplitPane {
 
                 options.add(viewerQuality);
             }
+            menuBar.add(createFileMenu());
             menuBar.add(options);
             menuBar.add(createFontsMenu());
             menuBar.add(invoiceActions.createValidationMenu());
-            menuBar.add(invoiceActions.createInvoiceMenu());
+            menuBar.add(createWizardsMenu());
             JMenu help = new JMenu(I18n.t("common.help"));
             JMenuItem manual = new JMenuItem(I18n.t("menu.manual"));
             manual.setToolTipText(I18n.t("menu.manual.tip"));
@@ -1117,6 +1302,43 @@ public class UI extends JSplitPane {
         return menuBar;
     }
 
+    /**
+     * The file menu: open, add and write, as in the {@link ActionBar}, with keyboard shortcuts. The items click the
+     * buttons, so they do the same and are disabled when the buttons are.
+     */
+    private JMenu createFileMenu() {
+        int shortcut = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+        JMenu file = new JMenu(I18n.t("menu.file"));
+        file.add(createFileItem(I18n.t("menu.file.open"), browseButton,
+                KeyStroke.getKeyStroke(KeyEvent.VK_O, shortcut)));
+        file.add(createFileItem(I18n.t("menu.file.add"), browseAppendButton,
+                KeyStroke.getKeyStroke(KeyEvent.VK_O, shortcut | InputEvent.SHIFT_DOWN_MASK)));
+        file.add(createFileItem(I18n.t("ui.save"), saveButton,
+                KeyStroke.getKeyStroke(KeyEvent.VK_S, shortcut)));
+        // On macOS the system menu has Quit.
+        if (!SystemInfo.isMacOS) {
+            file.addSeparator();
+            JMenuItem exit = new JMenuItem(I18n.t("menu.file.exit"));
+            exit.addActionListener(e -> {
+                if (confirmExit()) {
+                    saveWindowState();
+                    System.exit(0);
+                }
+            });
+            file.add(exit);
+        }
+        return file;
+    }
+
+    private static JMenuItem createFileItem(String text, JButton button, KeyStroke accelerator) {
+        JMenuItem item = new JMenuItem(text);
+        item.setAccelerator(accelerator);
+        item.setEnabled(button.isEnabled());
+        item.addActionListener(e -> button.doClick());
+        button.addPropertyChangeListener("enabled", e -> item.setEnabled(button.isEnabled()));
+        return item;
+    }
+
     protected void setDpi(int dpi) {
         Preferences.getInstance().set(Preferences.USER_PREF_DPI, dpi);
     }
@@ -1143,7 +1365,8 @@ public class UI extends JSplitPane {
         if (result == JFileChooser.APPROVE_OPTION) {
             File[] selectedFiles = chooser.getSelectedFiles();
             MergeOptions mo = new MergeOptions();
-            if (selectedFiles.length > 0 && confirmDiscard(I18n.t("ui.confirm.load"))) {
+            if (selectedFiles.length > 0 && confirmInvoiceDiscard(I18n.t("ui.confirm.load"))
+                    && confirmDiscard(I18n.t("ui.confirm.load"))) {
                 selectPdf(selectedFiles[0]);
                 for (int i = 1; i < selectedFiles.length; ++i)
                     appendPdf(selectedFiles[i], mo);
@@ -1178,7 +1401,7 @@ public class UI extends JSplitPane {
     /**
      * Moves the selected page.
      */
-    protected void doMoveRight() {
+    protected void doMoveDown() {
         PageWidget pw = pages.getSelectedPage();
         if (pw != null) {
             int pageCount = documentProxy.getPageCount();
@@ -1193,7 +1416,7 @@ public class UI extends JSplitPane {
     /**
      * Moves the selected page.
      */
-    protected void doMoveLeft() {
+    protected void doMoveUp() {
         PageWidget pw = pages.getSelectedPage();
         if (pw != null) {
             int pageNb = pw.getPageNumber() - 1;
@@ -1288,6 +1511,101 @@ public class UI extends JSplitPane {
     }
 
     /**
+     * Creates the menu of the wizards: tasks that start from a goal, not from the open document.
+     */
+    private JMenu createWizardsMenu() {
+        JMenu menu = new JMenu(I18n.t("menu.wizards"));
+        for (Wizard wizard : Wizards.ALL) {
+            JMenuItem item = new JMenuItem(wizard.title());
+            item.setToolTipText(wizard.description());
+            item.addActionListener(e -> wizard.start(this));
+            menu.add(item);
+        }
+        if (!Wizards.ALL.isEmpty())
+            menu.addSeparator();
+        JMenuItem layout = new JMenuItem(I18n.t("menu.wizards.layout"));
+        layout.setToolTipText(I18n.t("menu.wizards.layout.tip"));
+        layout.addActionListener(e -> com.bw.pdfixit.ui.template.LayoutEditorDialog.chooseAndEdit(SwingUtilities.getWindowAncestor(this)));
+        menu.add(layout);
+        JMenu recent = new JMenu(I18n.t("menu.wizards.recent"));
+        recent.setToolTipText(I18n.t("menu.wizards.recent.tip"));
+        // The list is made when the menu opens: templates are added by the editor and by the wizards.
+        recent.addMenuListener(new MenuListener() {
+            @Override
+            public void menuSelected(MenuEvent e) {
+                fillRecentTemplates(recent);
+            }
+
+            @Override
+            public void menuDeselected(MenuEvent e) {
+            }
+
+            @Override
+            public void menuCanceled(MenuEvent e) {
+            }
+        });
+        menu.add(recent);
+        return menu;
+    }
+
+    /**
+     * Fills the submenu with the last templates. One that doesn't exist any more looks disabled, and is dropped from
+     * the list when the user clicks it (a disabled item could not be clicked).
+     */
+    private void fillRecentTemplates(JMenu menu) {
+        menu.removeAll();
+        List<String> recent = Preferences.getInstance().getRecentTemplates();
+        if (recent.isEmpty()) {
+            JMenuItem none = new JMenuItem(I18n.t("menu.wizards.recent.none"));
+            none.setEnabled(false);
+            menu.add(none);
+            return;
+        }
+        for (String path : recent) {
+            final Path file = Path.of(path);
+            JMenuItem item = new JMenuItem(file.getFileName() == null ? path : file.getFileName().toString());
+            item.setToolTipText(path);
+            if (!Files.isRegularFile(file))
+                item.setForeground(UIManager.getColor("MenuItem.disabledForeground"));
+            item.addActionListener(e -> {
+                if (Files.isRegularFile(file)) {
+                    com.bw.pdfixit.ui.template.LayoutEditorDialog.edit(SwingUtilities.getWindowAncestor(this), file);
+                } else {
+                    Preferences.getInstance().removeRecentTemplate(path);
+                    JOptionPane.showMessageDialog(this, I18n.t("menu.wizards.recent.missing", path),
+                            I18n.t("menu.wizards"), JOptionPane.WARNING_MESSAGE);
+                }
+            });
+            menu.add(item);
+        }
+    }
+
+    /**
+     * The cards of the start page: the wizards, then the layout editor.
+     */
+    private List<StartPage.Card> startCards() {
+        List<StartPage.Card> cards = new ArrayList<>();
+        for (Wizard wizard : Wizards.ALL)
+            cards.add(new StartPage.Card(wizard.title(), wizard.description(), wizard.icon(), () -> wizard.start(this)));
+        cards.add(new StartPage.Card(I18n.t("start.layout"), I18n.t("menu.wizards.layout.tip"), "svg/card-layout",
+                () -> com.bw.pdfixit.ui.template.LayoutEditorDialog.chooseAndEdit(SwingUtilities.getWindowAncestor(this))));
+        return cards;
+    }
+
+    /**
+     * Hands a PDF that a wizard generated to the window: it becomes the current document, marked as changed, so the user
+     * is asked to save it before it is lost. The same questions as for loading a file are asked first.
+     *
+     * @return False if the user declined to replace the current document, nothing happened then.
+     */
+    public boolean openGenerated(byte[] pdf) {
+        if (!confirmInvoiceDiscard(I18n.t("ui.confirm.load")) || !confirmDiscard(I18n.t("ui.confirm.load")))
+            return false;
+        adopt(new Carry(pdf, true));
+        return true;
+    }
+
+    /**
      * Creates the menu to show the fonts of the document and to replace them.
      */
     private JMenu createFontsMenu() {
@@ -1351,6 +1669,9 @@ public class UI extends JSplitPane {
         if (pagesPerDocument.getValue() instanceof Number number) {
             int pagePerDocument = number.intValue();
             if (pagePerDocument > 0 && documentProxy != null) {
+                if (pdfaMode() && JOptionPane.showConfirmDialog(this, I18n.t("ui.split.pdfaWarning"),
+                        I18n.t("ui.split"), JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE) != JOptionPane.OK_OPTION)
+                    return;
 
                 String[] passwords = passwordsForSave();
                 if (passwords == null)
@@ -1368,6 +1689,8 @@ public class UI extends JSplitPane {
                 int result = chooser.showSaveDialog(this);
                 if (result == JFileChooser.APPROVE_OPTION) {
                     File selectedFile = chooser.getSelectedFile();
+                    if (!invoiceEditor.prepareForSave())
+                        return;
 
                     String fprefix;
                     String fpostfix;
@@ -1504,13 +1827,21 @@ public class UI extends JSplitPane {
                 null, options, options[0]);
         if (choice != 0)
             return;
-        // The document, with its unwritten changes, is carried over to the new user interface.
+        restartUI(I18n.t("language.restart.title"));
+    }
+
+    /**
+     * Creates the user interface anew. The document, with its unwritten changes, is carried over.
+     *
+     * @param title The title of an error message.
+     */
+    private void restartUI(String title) {
         final Carry carry;
         try {
             carry = capture();
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, I18n.t("common.errorPrefix", e.getMessage()),
-                    I18n.t("language.restart.title"), JOptionPane.ERROR_MESSAGE);
+                    title, JOptionPane.ERROR_MESSAGE);
             return;
         }
         shutdown();
@@ -1541,6 +1872,12 @@ public class UI extends JSplitPane {
      * Releases the resources of this user interface and closes its window.
      */
     private void shutdown() {
+        // The new window gets the size of this one.
+        saveWindowState();
+        if (windowStateTimer != null)
+            windowStateTimer.stop();
+        if (dividerAnimation != null)
+            dividerAnimation.stop();
         renderQueue.stop();
         if (documentProxy != null)
             documentProxy.close();
@@ -1610,7 +1947,20 @@ public class UI extends JSplitPane {
      * @return True if the program may exit.
      */
     protected boolean confirmExit() {
-        return confirmDiscard(I18n.t("ui.confirm.exit"));
+        return confirmInvoiceDiscard(I18n.t("ui.confirm.exit")) && confirmDiscard(I18n.t("ui.confirm.exit"));
+    }
+
+    /**
+     * Asks before the changes of the invoice editor are lost by exiting or by loading another document, if the option
+     * to confirm is set.
+     *
+     * @param title The title of the question.
+     * @return True if there are no changes or they may be discarded.
+     */
+    private boolean confirmInvoiceDiscard(String title) {
+        return !invoiceEditor.isDirty() || !Preferences.getInstance().getBoolean(Preferences.USER_PREF_CONFIRM_EXIT, true)
+                || JOptionPane.showConfirmDialog(this, I18n.t("ui.confirm.invoiceUnsaved"), title,
+                JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE) == JOptionPane.YES_OPTION;
     }
 
     /**
@@ -1645,8 +1995,6 @@ public class UI extends JSplitPane {
                 JFileChooser chooser = getSavePdfChooser();
                 int result = chooser.showSaveDialog(this);
                 if (result == JFileChooser.APPROVE_OPTION) {
-                    statusMessage.setText("");
-
                     File selectedFile = chooser.getSelectedFile();
                     Path selectedFilePath = selectedFile.toPath();
 
@@ -1659,6 +2007,10 @@ public class UI extends JSplitPane {
                     if (Files.exists(selectedFilePath) && !askOverwrite(this, selectedFilePath)) {
                         return;
                     }
+
+                    // The invoice of the editor is part of the document like the document information.
+                    if (!invoiceEditor.prepareForSave())
+                        return;
 
                     String[] passwords = passwordsForSave();
                     if (passwords == null)
@@ -1830,6 +2182,25 @@ public class UI extends JSplitPane {
         }
     }
 
+    /**
+     * The window is not smaller than the controls need (their width is protected in the split pane, they scroll only
+     * vertically) plus a usable preview of the pages. Call it after the window is packed and after a change of the
+     * font or the look and feel.
+     */
+    void updateMinimumWindowSize() {
+        Window window = SwingUtilities.getWindowAncestor(this);
+        if (window == null)
+            return;
+        Dimension min = new Dimension(getMinimumSize());
+        // The controls need the room of the open tabs. The window keeps its minimum if another tab is opened, it is the
+        // one for the widest tab: only the divider moves then, never the window.
+        if (drawer != null)
+            min.width += Math.max(0, drawer.widestWidth() - drawer.getPreferredSize().width);
+        Insets in = window.getInsets();
+        int menuHeight = window instanceof JFrame f && f.getJMenuBar() != null ? f.getJMenuBar().getPreferredSize().height : 0;
+        window.setMinimumSize(new Dimension(min.width + in.left + in.right, min.height + menuHeight + in.top + in.bottom));
+    }
+
     private void setSelectedPage(PageWidget page) {
         selectedPage = page;
         boolean enabled = page != null;
@@ -1837,20 +2208,62 @@ public class UI extends JSplitPane {
         renderToImageButton.setEnabled(enabled);
         redactButton.setEnabled(enabled);
         rotateClockwiseButton.setEnabled(enabled);
-        moveLeft.setEnabled(enabled);
-        moveRight.setEnabled(enabled);
         exportImages.setEnabled(enabled);
-        if (enabled) {
-            pageNb.setText(I18n.t("ui.pageNumber", page.getPageNumber()));
-            pageNb.setFont(normalFont);
-            quality.setText(String.format("%d dpi (x %.2f)", page.getPage().dpi, page.getScale()));
-            rotation.setText(page.getPage().getRotation() + " °");
-        } else {
-            rotation.setText("");
-            pageNb.setText(I18n.t("ui.selectPage"));
-            pageNb.setFont(hintFont);
-            quality.setText("");
+        updatePageCounter();
+        updateZoomControls();
+    }
+
+    /**
+     * Shows the selected page, the page count and the rotation. The resolution and the scale of the page are
+     * only in the tooltip, and only in debug mode.<br>
+     * The buttons for the previous and the next page and for moving the page are only enabled if there is a page in
+     * that direction.
+     */
+    private void updatePageCounter() {
+        final PageWidget page = selectedPage;
+        final int count = documentProxy == null ? 0 : documentProxy.getPageCount();
+        final int pageNb = page == null ? 0 : page.getPageNumber();
+        previousPageButton.setEnabled(pageNb > 1);
+        moveUp.setEnabled(pageNb > 1);
+        nextPageButton.setEnabled(pageNb > 0 && pageNb < count);
+        moveDown.setEnabled(pageNb > 0 && pageNb < count);
+        if (page == null) {
+            pageCounter.setState(0, count);
+            pageOrientation.setRotation(0);
+            pageCounter.setToolTipText(I18n.t("ui.selectPage"));
+            pageOrientation.setToolTipText(null);
+            return;
         }
+        final int rotation = page.getPage().getRotation();
+        pageCounter.setState(pageNb, count);
+        pageOrientation.setRotation(rotation);
+        String tip = rotation % 360 == 0
+                ? I18n.t("ui.pageCounter.tip", pageNb, count)
+                : I18n.t("ui.pageCounter.rotated.tip", pageNb, count, Math.floorMod(rotation, 360));
+        pageOrientation.setToolTipText(rotation % 360 == 0 ? null : tip);
+        if (Log.isDebug())
+            tip = String.format("%s (%d dpi, x %.2f)", tip, page.getPage().dpi, page.getScale());
+        pageCounter.setToolTipText(tip);
+    }
+
+    /**
+     * Selects a page and scrolls to its top, like the page keys of a viewer.
+     *
+     * @param pageNb The page (1 based). Nothing happens if there is no such page.
+     */
+    private void showPage(int pageNb) {
+        if (documentProxy == null || pageNb < 1 || pageNb > documentProxy.getPageCount())
+            return;
+        PageWidget pw = pages.getPageWidget(pageNb);
+        pages.setSelectedPage(pw);
+        // The pages scroll the selected page into view later, but a page taller than the view is shown from its bottom
+        // if it is above. This comes after that.
+        SwingUtilities.invokeLater(() -> {
+            JViewport viewport = (JViewport) SwingUtilities.getAncestorOfClass(JViewport.class, pw);
+            if (viewport != null && !pw.getBounds().isEmpty())
+                pw.scrollRectToVisible(new Rectangle(0, 0, pw.getWidth(),
+                        Math.min(pw.getHeight(), viewport.getExtentSize().height)));
+        });
     }
 
     protected void loadSignature(File file) {
@@ -1897,20 +2310,40 @@ public class UI extends JSplitPane {
     private final KeyAdapter busyKeyAdapter = new KeyAdapter() {
     };
 
+    /**
+     * The windows that are blocked while busy.
+     */
+    private final List<Window> busyWindows = new ArrayList<>();
+
     public void setBusy(boolean busy) {
         if (this.busy != busy) {
             Log.info("setBusy(%s)", busy);
             this.busy = busy;
-            UI.mainWindow.setCursor(Cursor.getPredefinedCursor(busy ? Cursor.WAIT_CURSOR : Cursor.DEFAULT_CURSOR));
-            Component glassPane = UI.mainWindow.getGlassPane();
-            glassPane.setVisible(busy);
             if (busy) {
-                glassPane.addMouseListener(busyMouseAdapter);
-                glassPane.addKeyListener(busyKeyAdapter);
-                glassPane.requestFocusInWindow();
+                // The main window and the windows it owns (e.g. the invoice window).
+                List<Window> windows = new ArrayList<>();
+                windows.add(UI.mainWindow);
+                windows.addAll(List.of(UI.mainWindow.getOwnedWindows()));
+                for (Window w : windows) {
+                    if (!w.isShowing() || !(w instanceof RootPaneContainer rpc))
+                        continue;
+                    w.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+                    Component glassPane = rpc.getGlassPane();
+                    glassPane.setVisible(true);
+                    glassPane.addMouseListener(busyMouseAdapter);
+                    glassPane.addKeyListener(busyKeyAdapter);
+                    busyWindows.add(w);
+                }
+                UI.mainWindow.getGlassPane().requestFocusInWindow();
             } else {
-                glassPane.removeMouseListener(busyMouseAdapter);
-                glassPane.removeKeyListener(busyKeyAdapter);
+                for (Window w : busyWindows) {
+                    w.setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
+                    Component glassPane = ((RootPaneContainer) w).getGlassPane();
+                    glassPane.setVisible(false);
+                    glassPane.removeMouseListener(busyMouseAdapter);
+                    glassPane.removeKeyListener(busyKeyAdapter);
+                }
+                busyWindows.clear();
             }
         }
     }
@@ -1918,7 +2351,7 @@ public class UI extends JSplitPane {
     /**
      * Runs the code on the event dispatch thread: directly if already there, otherwise later.
      */
-    private static void runOnEdt(Runnable r) {
+    private static void runOnDispatch(Runnable r) {
         if (SwingUtilities.isEventDispatchThread())
             r.run();
         else
@@ -1929,7 +2362,7 @@ public class UI extends JSplitPane {
         setBusy(true);
         new SwingWorker<>() {
             @Override
-            protected Object doInBackground()  {
+            protected Object doInBackground() {
                 r.run();
                 return null;
             }
@@ -1966,14 +2399,18 @@ public class UI extends JSplitPane {
         }
         documentProxy = null;
         pages.clear();
+        ((java.awt.CardLayout) pagesCards.getLayout()).show(pagesCards, selectedFile == null ? CARD_START : CARD_PAGES);
+        // The errors belong to the old document.
+        documentErrors.forEach(toaster::close);
+        documentErrors.clear();
 
         if (selectedFile != null) {
             documentProxy = new DocumentProxy(renderQueue);
             initialLoad = true;
             hadInvoice = false;
             documentProxy.invoiceStandardCheck = this::checkInvoiceStandard;
-            documentProxy.pdfaFixListener = changes -> runOnEdt(() -> notifyPdfaFixes(changes));
-            documentProxy.riskListener = (fileName, risks) -> runOnEdt(() -> {
+            documentProxy.pdfaFixListener = changes -> runOnDispatch(() -> notifyPdfaFixes(changes));
+            documentProxy.riskListener = (fileName, risks) -> runOnDispatch(() -> {
                 StringBuilder list = new StringBuilder();
                 risks.forEach(r -> list.append("&bull; ").append(r).append("<br>"));
                 toaster.toast(ToastType.WARNING, 15000,
@@ -1982,14 +2419,22 @@ public class UI extends JSplitPane {
             documentProxy.appendCheck = doc -> {
                 if (!pdfaMode || PdfStandard.pdfaPart(doc) > 0)
                     return null;
-                toaster.toast(ToastType.ERROR, 10000,
-                        I18n.t("toast.notAppended"));
+                runOnDispatch(() -> documentError(I18n.t("toast.notAppended")));
                 return I18n.t("ui.notAppended");
             };
             final java.util.function.Function<PDDocument, String> pdfaCheck = documentProxy.appendCheck;
             documentProxy.appendCheck = doc -> {
                 String refused = pdfaCheck.apply(doc);
-                return refused != null ? refused : EInvoice.hasInvoice(doc) ? checkInvoiceStandard() : null;
+                if (refused != null || !EInvoice.hasInvoice(doc))
+                    return refused;
+                refused = checkInvoiceStandard();
+                if (refused != null) {
+                    // Declined by the user (no error) or the question failed.
+                    final String reason = refused;
+                    runOnDispatch(() -> toaster.toast(ToastType.WARNING, 10000, I18n.t("toast.notAppendedReason"),
+                            escapeHtml(reason)));
+                }
+                return refused;
             };
             documentProxy.addDocumentConsumer(new DocumentProxy.DocumentConsumer() {
 
@@ -1999,23 +2444,24 @@ public class UI extends JSplitPane {
                     // "document" is always the main effective document.
 
                     renderAllToImageButton.setEnabled(true);
-                    rotateAllClockwiseButton.setEnabled(true);
+                    rotateAllClockwiseButton.setEnabled(document.getNumberOfPages() > 0);
                     saveButton.setEnabled(true);
                     browseAppendButton.setEnabled(true);
                     standardButton.setEnabled(true);
                     // May be called from background tasks (e.g. attaching an invoice).
                     final boolean hasInvoice = EInvoice.hasInvoice(document);
-                    runOnEdt(() -> {
+                    runOnDispatch(() -> {
                         // Only an added invoice is repaired automatically, not a loaded document.
                         final boolean invoiceAdded = hasInvoice && !hadInvoice && !initialLoad;
+                        // The invoice editor shows the loaded document, not what was edited for the one before.
+                        final boolean loaded = initialLoad;
                         initialLoad = false;
                         hadInvoice = hasInvoice;
+                        invoiceActions.documentChanged(documentProxy, loaded);
                         updatePdfAState(invoiceAdded);
                     });
 
                     initDocumentInformation();
-
-                    statusMessage.setText("");
                 }
 
                 @Override
@@ -2023,22 +2469,33 @@ public class UI extends JSplitPane {
                     if (documentProxy == null)
                         // Force initialisation for case where loading the main file failed.
                         selectPdf(null);
-                    statusMessage.setText(error == null ? "" : error);
+                    runOnDispatch(() -> {
+                        // The main document is not loading any more.
+                        toaster.close(loadingToast[0]);
+                        loadingToast[0] = null;
+                        documentError(String.format(I18n.t("toast.loadFailed"), toastText(error)));
+                    });
                 }
             });
             pages.setDocument(documentProxy);
             try {
                 final String fileName = selectedFile.getName();
                 Toast toast = toaster.toast(I18n.t("toast.loading"), fileName);
+                loadingToast[0] = toast;
                 long start = System.currentTimeMillis();
                 load(selectedFile.toPath(), new MergeOptions(), document -> {
+                    loadingToast[0] = null;
                     if (toast != null)
                         toast.setMessage(String.format(I18n.t("toast.loaded"),
                                 System.currentTimeMillis() - start, fileName));
                 });
             } catch (Exception e) {
-                statusMessage.setText(e.getMessage());
+                toaster.close(loadingToast[0]);
+                loadingToast[0] = null;
                 selectPdf(null);
+                // After the reset above, which closes the errors of the old document.
+                documentError(String.format(I18n.t("toast.loadFailed"),
+                        toastText(e.getMessage() == null ? e.toString() : e.getMessage())));
             }
         } else {
             initDocumentInformation();
@@ -2050,6 +2507,7 @@ public class UI extends JSplitPane {
             saveButton.setEnabled(false);
             splitDocument.setEnabled(false);
             browseAppendButton.setEnabled(false);
+            runOnDispatch(() -> invoiceActions.documentChanged(documentProxy,  true));
         }
     }
 
@@ -2063,12 +2521,52 @@ public class UI extends JSplitPane {
                 creator.getText(), producer.getText()));
     }
 
+    /**
+     * Saves the XMP metadata of the document to a file.
+     */
+    protected void doExportXmp() {
+        final PDDocument document = documentProxy == null ? null : documentProxy.getDocument();
+        if (document == null)
+            return;
+        try {
+            byte[] xmp = DocumentInformation.extractXmp(document).orElse(null);
+            if (xmp == null) {
+                toaster.toast(ToastType.ERROR, 5000, I18n.t("toast.noXmp"));
+                return;
+            }
+            JFileChooser chooser = new JFileChooser();
+            String lastDir = getPref(Preferences.USER_PREF_LAST_PDF_DIR, null);
+            if (lastDir != null)
+                chooser.setCurrentDirectory(new File(lastDir));
+            chooser.setDialogTitle(I18n.t("chooser.saveXmp"));
+            chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+            chooser.setMultiSelectionEnabled(false);
+            chooser.setFileFilter(new FileNameExtensionFilter(I18n.t("filter.xmp"), "xmp", "xml"));
+            chooser.setSelectedFile(new File(chooser.getCurrentDirectory(), "metadata.xmp"));
+            if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION)
+                return;
+            File file = chooser.getSelectedFile();
+            if (!file.getName().contains("."))
+                file = new File(file.getParentFile(), file.getName() + ".xmp");
+            if (file.exists() && !askOverwrite(this, file.toPath()))
+                return;
+            java.nio.file.Files.write(file.toPath(), xmp);
+            toaster.toast(ToastType.SUCCESS, 5000, I18n.t("toast.xmpStored"), file.getName());
+        } catch (Exception e) {
+            Log.exception(e);
+            toaster.toast(ToastType.ERROR, 20000, I18n.t("toast.xmpFailed"),
+                    e.getMessage() == null ? e.toString() : e.getMessage());
+        }
+    }
+
     protected void initDocumentInformation() {
 
         final boolean useDoc = useDocumentInformation.isSelected();
         final PDDocument document = documentProxy == null ? null : documentProxy.getDocument();
+        final boolean hasXmp = document != null && document.getDocumentCatalog().getMetadata() != null;
+        runOnDispatch(() -> exportXmp.setEnabled(hasXmp));
         if (document != null) {
-            pageCount.setText(String.format("%d", documentProxy.getPageCount()));
+            runOnDispatch(this::updatePageCounter);
             final String standard = PdfStandard.describe(document);
             SwingUtilities.invokeLater(() -> pdfStandard.setText(standard));
 
@@ -2089,7 +2587,7 @@ public class UI extends JSplitPane {
                 keywords.setText(a == null ? "" : a);
             }
         } else {
-            pageCount.setText("");
+            runOnDispatch(this::updatePageCounter);
             pdfStandard.setText("");
             if (useDoc) {
                 title.setText("");
@@ -2158,7 +2656,7 @@ public class UI extends JSplitPane {
             toaster.toast(ToastType.INFO, 10000, I18n.t("toast.compressionOff", declared));
         }
         compression.setEnabled(compressionAllowed);
-        compression.setToolTipText(compressionAllowed ? null : I18n.t("toast.compressionOff", declared));
+        compression.setToolTipText(compressionAllowed ? I18n.t("ui.compression.tip") : I18n.t("toast.compressionOff", declared));
         final boolean pdfa = pdfaMode;
         final String notAllowed = I18n.t("ui.pdfaNotAllowed");
 
@@ -2170,8 +2668,9 @@ public class UI extends JSplitPane {
         ownerPasswordField.setToolTipText(pdfa ? notAllowed : null);
         userPasswordField.setToolTipText(pdfa ? notAllowed : null);
 
-        splitDocument.setEnabled(hasDocument && !pdfa);
-        splitDocument.setToolTipText(pdfa ? I18n.t("ui.split.pdfaNotAllowed") : null);
+        // Splitting is possible for PDF/A too, but the parts are not PDF/A: it warns, see doSplit.
+        splitDocument.setEnabled(hasDocument);
+        splitDocument.setToolTipText(pdfa ? I18n.t("ui.split.pdfaWarning") : null);
 
         updatePermissions();
     }
@@ -2180,6 +2679,15 @@ public class UI extends JSplitPane {
      * Opens the dialog to change the PDF/A level of the document and converts it.
      */
     protected void doChangeStandard() {
+        doChangeStandard(null);
+    }
+
+    /**
+     * Opens the dialog to change the PDF standard of the document and converts it.
+     *
+     * @param preselected The level that is selected when the dialog opens, null for the current one.
+     */
+    protected void doChangeStandard(PdfStandardProfile preselected) {
         final DocumentProxy proxy = documentProxy;
         if (proxy == null || proxy.getDocument() == null)
             return;
@@ -2192,7 +2700,7 @@ public class UI extends JSplitPane {
             return;
         }
         StandardDialog.Choice choice = StandardDialog.showDialog(this, bytes, PdfStandard.profile(proxy.getDocument()),
-                proxy.getDocument().getVersion());
+                proxy.getDocument().getVersion(), preselected);
         if (choice == null)
             return;
         reportedResult = ValidationResult.conform();
@@ -2201,6 +2709,7 @@ public class UI extends JSplitPane {
         runInBusy(() -> {
             try {
                 var changes = proxy.convertToStandard(choice.profile(), choice.version());
+                final int generation = proxy.getContentGeneration();
                 // Wait for veraPDF, the result is shown together with the changes.
                 ValidationResult verification = ValidationResult.notDeclared();
                 if (choice.profile() != null && choice.profile().verifiable()) {
@@ -2212,18 +2721,20 @@ public class UI extends JSplitPane {
                     }
                 }
                 final ValidationResult result = verification;
-                runOnEdt(() -> {
+                runOnDispatch(() -> {
                     reportedProxy = proxy;
                     reportedResult = result;
+                    checkedProxy = proxy;
+                    checkedGeneration = generation;
                     showSwitchResult(choice.profile(), changes, result);
                 });
             } catch (Exception e) {
                 Log.error("PDF standard: %s", e.getMessage());
-                runOnEdt(() -> toaster.toast(ToastType.ERROR, 20000,
+                runOnDispatch(() -> toaster.toast(ToastType.ERROR, 20000,
                         I18n.t("toast.notPossible"), e.getMessage()));
             } finally {
                 // After the update the announcement caused.
-                runOnEdt(() -> switchingStandard = false);
+                runOnDispatch(() -> switchingStandard = false);
             }
         });
     }
@@ -2251,7 +2762,7 @@ public class UI extends JSplitPane {
                     changesLabel.setText(switchChangesHtml(target, shown));
                 }), BorderLayout.SOUTH);
         } else if (target != null) {
-            content.add(new JLabel("<html><i>" + escapeHtml(target.notVerifiableReason()) + "</i></html>"),
+            content.add(new HtmlLabel("<html><i>" + escapeHtml(target.notVerifiableReason()) + "</i></html>"),
                     BorderLayout.CENTER);
         }
         JOptionPane.showMessageDialog(this, content, I18n.t("ui.standard.title"),
@@ -2283,7 +2794,7 @@ public class UI extends JSplitPane {
      *                  repair the document or failed.
      */
     JPanel createVeraPdfFixerRow(VerificationResultPanel result,
-                                         java.util.function.Consumer<java.util.List<String>> onActions) {
+                                 java.util.function.Consumer<java.util.List<String>> onActions) {
         final DocumentProxy proxy = documentProxy;
         JButton run = new JButton(I18n.t("ui.fixer.run"));
         run.setToolTipText(I18n.t("ui.fixer.run.tip"));
@@ -2306,13 +2817,14 @@ public class UI extends JSplitPane {
                 @Override
                 protected Object[] doInBackground() throws Exception {
                     var changes = proxy.fixPdfa(switchStandard);
+                    final int generation = proxy.getContentGeneration();
                     ValidationResult verification;
                     try {
                         verification = proxy.validatePdfa();
                     } catch (Exception ex) {
                         verification = ValidationResult.failed(ex.getMessage());
                     }
-                    return new Object[]{changes, verification};
+                    return new Object[]{changes, verification, generation};
                 }
 
                 @Override
@@ -2325,6 +2837,8 @@ public class UI extends JSplitPane {
                         result.setResult(verification);
                         reportedProxy = proxy;
                         reportedResult = verification;
+                        checkedProxy = proxy;
+                        checkedGeneration = (Integer) get()[2];
                         changes.forEach((what, times) -> actions.add(what + (times > 1 ? " (" + times + "x)" : "")));
                         if (changes.isEmpty())
                             actions.add(I18n.t("ui.fixer.nothing"));
@@ -2355,9 +2869,39 @@ public class UI extends JSplitPane {
     }
 
     /**
+     * A plain text for a toast: escaped, line breaks kept.
+     */
+    private static String toastText(String s) {
+        return s == null ? "" : escapeHtml(s).replace("\n", "<br>");
+    }
+
+    /**
+     * Shows an error of the current document. It stays until the user closes it or a new document is loaded.
+     */
+    private void documentError(String html) {
+        Toast t = toaster.toast(ToastType.ERROR, Toaster.UNTIL_CLOSED, html);
+        if (t != null)
+            documentErrors.add(t);
+    }
+
+    /**
      * Result of the PDF/A check: the violations and what a repair would change.
      */
     private record PdfaCheck(ValidationResult result, java.util.Map<String, Integer> repairs) {
+    }
+
+    /**
+     * Starts a PDF/A check if the document changed (or another one was loaded) while the last check ran:
+     * the announcements of these changes found the check running and were dropped.
+     */
+    private void checkPdfaAgainIfChanged() {
+        final DocumentProxy proxy = documentProxy;
+        if (proxy == null || proxy.getDocument() == null || switchingStandard)
+            return;
+        if (proxy == checkedProxy && proxy.getContentGeneration() == checkedGeneration)
+            return;
+        if (PdfStandard.pdfaPart(proxy.getDocument()) > 0)
+            reportPdfaViolations();
     }
 
     /**
@@ -2365,10 +2909,19 @@ public class UI extends JSplitPane {
      * something, the user is asked to repair the document. Otherwise the violations are shown.
      */
     private void reportPdfaViolations() {
-        // The document is announced as loaded many times (e.g. after each rendered page): check one at a time.
+        final DocumentProxy proxy = documentProxy;
+        if (proxy == null)
+            return;
+        final int generation = proxy.getContentGeneration();
+        // Already checked: nothing changed that matters for the standard (e.g. only pages were rotated).
+        if (proxy == checkedProxy && generation == checkedGeneration)
+            return;
+        // The document is announced as loaded many times: check one at a time.
+        // A change during the check is checked when it is done, see checkPdfaAgainIfChanged.
         if (!pdfaChecking.compareAndSet(false, true))
             return;
-        final DocumentProxy proxy = documentProxy;
+        checkedProxy = proxy;
+        checkedGeneration = generation;
         new SwingWorker<PdfaCheck, Void>() {
             @Override
             protected PdfaCheck doInBackground() throws Exception {
@@ -2388,6 +2941,14 @@ public class UI extends JSplitPane {
             @Override
             protected void done() {
                 pdfaChecking.set(false);
+                try {
+                    showCheck();
+                } finally {
+                    checkPdfaAgainIfChanged();
+                }
+            }
+
+            private void showCheck() {
                 try {
                     PdfaCheck check = get();
                     if (check.result().getState() != ValidationResult.State.NOT_CONFORM) {
@@ -2466,7 +3027,8 @@ public class UI extends JSplitPane {
             return I18n.t("ui.invoice.abort.notPdfa3");
         try {
             // Without telling the listeners: the invoice operation continues with the document.
-            proxy.convertToStandardQuietly(PdfStandardProfile.PDFA_3B, pdf2 ? Float.valueOf(1.7f) : null);
+            // The conformance letter of the document is kept (a stays a, u stays u).
+            proxy.convertToStandardQuietly(PdfStandard.pdfa3Level(document), pdf2 ? Float.valueOf(1.7f) : null);
         } catch (IOException e) {
             return I18n.t("ui.aborted", e.getMessage());
         }
@@ -2526,6 +3088,7 @@ public class UI extends JSplitPane {
 
     protected void updatePermissions() {
         boolean rightsPossible = !pdfaMode && !ownerPasswordField.getText().trim().isEmpty();
+        permissionsHint.setText(rightsPossible ? " " : I18n.t(pdfaMode ? "perm.hint.pdfa" : "perm.hint.password"));
         allowPrinting.setEnabled(rightsPossible);
         allowExtraction.setEnabled(rightsPossible);
         allowModification.setEnabled(rightsPossible);
@@ -2656,7 +3219,7 @@ public class UI extends JSplitPane {
             UIManager.put("Panel.arc", 8);
             UI ui = new UI();
 
-            UI.mainWindow = new JFrame(I18n.t("ui.windowTitle"));
+            UI.mainWindow = new JFrame(AboutInfo.NAME + " – " + I18n.t("app.subtitle"));
 
             try {
                 ShapeMultiResolutionImage icon = new ShapeMultiResolutionImage(
@@ -2670,8 +3233,10 @@ public class UI extends JSplitPane {
             UI.mainWindow.addWindowListener(new java.awt.event.WindowAdapter() {
                 @Override
                 public void windowClosing(java.awt.event.WindowEvent e) {
-                    if (ui.confirmExit())
+                    if (ui.confirmExit()) {
+                        ui.saveWindowState();
                         System.exit(0);
+                    }
                 }
             });
 
@@ -2679,9 +3244,10 @@ public class UI extends JSplitPane {
             try {
                 if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.APP_QUIT_HANDLER))
                     Desktop.getDesktop().setQuitHandler((e, response) -> {
-                        if (ui.confirmExit())
+                        if (ui.confirmExit()) {
+                            ui.saveWindowState();
                             response.performQuit();
-                        else
+                        } else
                             response.cancelQuit();
                     });
             } catch (Exception ex) {
@@ -2689,10 +3255,10 @@ public class UI extends JSplitPane {
             }
 
             UI.mainWindow.setJMenuBar(ui.getMenu());
-            UI.mainWindow.setLocationByPlatform(true);
-            ui.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
             UI.mainWindow.setContentPane(ui);
             UI.mainWindow.pack();
+            ui.updateMinimumWindowSize();
+            ui.applyWindowState(UI.mainWindow);
             UI.mainWindow.setVisible(true);
 
             if (carry != null && carry.pdf() != null) {

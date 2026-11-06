@@ -2,6 +2,7 @@ package com.bw.pdfixit;
 
 import java.text.MessageFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.MissingResourceException;
@@ -25,6 +26,9 @@ public final class I18n {
     public static final String SYSTEM = "";
 
     static final String BUNDLE = "messages";
+
+    // To add a language: create messages_<code>.properties and add the code to lang.available.
+    public static final List<String> availableLanguages= Arrays.asList("en","de");
 
     private static volatile ResourceBundle bundle;
     private static volatile Locale locale = Locale.ENGLISH;
@@ -104,6 +108,27 @@ public final class I18n {
     }
 
     /**
+     * Translates a text into a given language, independent of the language of the user interface (e.g. for the texts
+     * printed on an invoice). A language without translation gives the English default.
+     *
+     * @param locale The language.
+     * @param key    The key in the bundle.
+     * @param args   Optional arguments for the placeholders {0}, {1}, ... ({@link MessageFormat}).
+     * @return The text, or the key in square brackets if there is no such key.
+     */
+    public static String t(Locale locale, String key, Object... args) {
+        String text;
+        try {
+            text = load(locale).getString(key);
+        } catch (MissingResourceException e) {
+            return "[" + key + "]";
+        }
+        if (args.length == 0)
+            return text;
+        return new MessageFormat(text, locale).format(args);
+    }
+
+    /**
      * True if there is a text for the key.
      */
     public static boolean has(String key) {
@@ -114,11 +139,7 @@ public final class I18n {
      * The codes of the languages with a translation, English first.
      */
     public static List<String> availableLanguages() {
-        List<String> r = new ArrayList<>();
-        for (String c : load(Locale.ROOT).getString("lang.available").split(","))
-            if (!c.isBlank())
-                r.add(c.trim());
-        return r;
+        return availableLanguages;
     }
 
     /**

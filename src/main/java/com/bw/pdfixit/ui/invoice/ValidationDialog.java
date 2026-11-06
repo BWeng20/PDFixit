@@ -1,18 +1,10 @@
 package com.bw.pdfixit.ui.invoice;
 
 import com.bw.pdfixit.I18n;
-import com.bw.pdfixit.ui.CollapsibleTextPanel;
 import com.bw.pdfixit.invoice.EInvoice;
-import javax.swing.BorderFactory;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.JButton;
-import javax.swing.JComponent;
-import javax.swing.JDialog;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.KeyStroke;
-import javax.swing.UIManager;
+import com.bw.pdfixit.ui.CollapsibleTextPanel;
+
+import javax.swing.*;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dialog;
@@ -54,7 +46,7 @@ public class ValidationDialog extends JDialog {
      *
      * @return [errors, warnings]
      */
-    static int[] count(EInvoice.Validation validation) {
+    public static int[] count(EInvoice.Validation validation) {
         int errors = 0;
         int warnings = 0;
         for (String m : validation.messages()) {
@@ -69,7 +61,7 @@ public class ValidationDialog extends JDialog {
     /**
      * Text of the second line, e.g. "2 errors, 1 warning".
      */
-    static String summary(EInvoice.Validation validation) {
+    public static String summary(EInvoice.Validation validation) {
         int[] c = count(validation);
         if (c[0] == 0 && c[1] == 0)
             return validation.valid() ? I18n.t("validation.none") : I18n.t("validation.seeDetails");

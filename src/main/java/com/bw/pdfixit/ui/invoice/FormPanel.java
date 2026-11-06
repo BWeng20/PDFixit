@@ -22,8 +22,21 @@ class FormPanel extends JPanel {
      */
     private final Component filler = Box.createGlue();
 
+    /**
+     * If a row with two pairs of caption and field is shown as two rows: a narrow form.
+     */
+    private final boolean stacked;
+
     FormPanel() {
+        this(false);
+    }
+
+    /**
+     * @param stacked True for a narrow form: a row with two pairs of caption and field is shown as two rows.
+     */
+    FormPanel(boolean stacked) {
         super(new GridBagLayout());
+        this.stacked = stacked;
         setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
     }
 
@@ -51,6 +64,25 @@ class FormPanel extends JPanel {
     }
 
     void row(String caption, JComponent field, String caption2, JComponent field2) {
+        if (stacked && field2 != null) {
+            row(caption, field);
+            row(caption2, field2);
+            return;
+        }
+        addRow(caption, field, caption2, field2, false);
+    }
+
+    /**
+     * A row with two pairs of caption and field, also in a stacked form: for short values that fit side by side.
+     *
+     * @param compactSecond True if the second field keeps its natural width (e.g. a currency code) and the first
+     *                      takes the rest of the row, otherwise both share it.
+     */
+    void pairRow(String caption, JComponent field, String caption2, JComponent field2, boolean compactSecond) {
+        addRow(caption, field, caption2, field2, compactSecond);
+    }
+
+    private void addRow(String caption, JComponent field, String caption2, JComponent field2, boolean compactSecond) {
         GridBagConstraints gc = new GridBagConstraints();
         gc.gridy = row++;
         gc.anchor = GridBagConstraints.WEST;
@@ -63,8 +95,7 @@ class FormPanel extends JPanel {
         if (field2 == null) {
             gc.gridwidth = 4;
             gc.insets = new Insets(3, 0, 3, 0);
-        }
-        else
+        } else
             gc.insets = new Insets(3, 0, 3, 18);
         add(field, gc);
         if (field2 != null) {
@@ -75,8 +106,8 @@ class FormPanel extends JPanel {
             gc.insets = new Insets(3, 0, 3, 10);
             add(new JLabel(caption2), gc);
             gc.gridx = 3;
-            gc.fill = GridBagConstraints.HORIZONTAL;
-            gc.weightx = 1;
+            gc.fill = compactSecond ? GridBagConstraints.NONE : GridBagConstraints.HORIZONTAL;
+            gc.weightx = compactSecond ? 0 : 1;
             gc.insets = new Insets(3, 0, 3, 0);
             add(field2, gc);
         }

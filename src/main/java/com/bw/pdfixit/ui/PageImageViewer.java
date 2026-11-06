@@ -167,12 +167,18 @@ public final class PageImageViewer extends JPanel {
         resourceList.removeAll();
         imageMap.clear();
         for (var image : images) {
-            imageMap.put(image.name, image);
+            imageMap.put(image.signature ? image.name + " " + I18n.t("images.signature") : image.name, image);
         }
         for (var name : imageMap.keySet()) {
             resourceList.add(name);
         }
-        showImageByName(null);
+        // The first image is selected and shown, so there is something to see and to save right away.
+        if (resourceList.getItemCount() > 0) {
+            resourceList.select(0);
+            showImageByName(resourceList.getItem(0));
+        } else {
+            showImageByName(null);
+        }
         combinedImage = null;
         setShowCombined(false);
         saveAll.setEnabled(!images.isEmpty());

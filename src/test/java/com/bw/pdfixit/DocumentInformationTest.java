@@ -105,4 +105,20 @@ class DocumentInformationTest {
             Assertions.assertEquals("My Title", doc.getDocumentInformation().getTitle());
         }
     }
+
+    @Test
+    void extractXmp_returnsStoredPacket() throws Exception {
+        try (PDDocument doc = Loader.loadPDF(EInvoiceTest.invoicePdf(1))) {
+            byte[] xmp = DocumentInformation.extractXmp(doc).orElseThrow();
+            Assertions.assertArrayEquals(doc.getDocumentCatalog().getMetadata().toByteArray(), xmp);
+            Assertions.assertNotNull(new DomXmpParser().parse(xmp));
+        }
+    }
+
+    @Test
+    void extractXmp_emptyWithoutMetadata() throws Exception {
+        try (PDDocument doc = Loader.loadPDF(EInvoiceTest.plainPdf(1))) {
+            Assertions.assertTrue(DocumentInformation.extractXmp(doc).isEmpty());
+        }
+    }
 }

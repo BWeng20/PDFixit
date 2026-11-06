@@ -14,9 +14,11 @@ import org.apache.xmpbox.xml.DomXmpParser;
 import org.apache.xmpbox.xml.XmpSerializer;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Writes the document information (title, author, ...) of a document.<br>
@@ -118,6 +120,19 @@ public final class DocumentInformation {
      */
     static void removeInfo(PDDocument document) {
         document.getDocument().getTrailer().removeItem(org.apache.pdfbox.cos.COSName.INFO);
+    }
+
+    /**
+     * Gets the XMP metadata of the document as stored in the file.
+     *
+     * @return The raw XMP packet, empty if the document has no (or empty) XMP metadata.
+     */
+    public static Optional<byte[]> extractXmp(PDDocument document) throws IOException {
+        PDMetadata metadata = document.getDocumentCatalog().getMetadata();
+        if (metadata == null)
+            return Optional.empty();
+        byte[] xmp = metadata.toByteArray();
+        return xmp.length == 0 ? Optional.empty() : Optional.of(xmp);
     }
 
     private static boolean isPdfA(PDMetadata metadata) {

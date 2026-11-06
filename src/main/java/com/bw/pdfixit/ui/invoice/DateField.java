@@ -49,14 +49,18 @@ import java.util.Locale;
 public class DateField extends JPanel {
 
     private enum Part {
-        DAY(2, "dd"), MONTH(2, "MM"), YEAR(4, "yyyy");
+        DAY(2, "date.format.day"), MONTH(2, "date.format.month"), YEAR(4, "date.format.year");
 
         final int length;
-        final String placeholder;
+        /**
+         * Key of the text shown in the empty field: the letters of the date format in the language of the user
+         * interface, e.g. "TT", "MM" and "JJJJ" in German.
+         */
+        final String placeholderKey;
 
-        Part(int length, String placeholder) {
+        Part(int length, String placeholderKey) {
             this.length = length;
-            this.placeholder = placeholder;
+            this.placeholderKey = placeholderKey;
         }
     }
 
@@ -405,10 +409,12 @@ public class DateField extends JPanel {
         private Integer pendingCaret;
 
         PartField(Part part) {
-            super(part.length);
+            // Day and month get room for their placeholder: "MM" is wider than two average characters. The fields
+            // keep this width, they don't grow with the form.
+            super(part == Part.YEAR ? part.length : part.length + 1);
             this.part = part;
             setHorizontalAlignment(SwingConstants.CENTER);
-            putClientProperty("JTextField.placeholderText", part.placeholder);
+            putClientProperty("JTextField.placeholderText", I18n.t(part.placeholderKey));
             ((AbstractDocument) getDocument()).setDocumentFilter(new Filter());
             getDocument().addDocumentListener(new DocumentListener() {
                 @Override

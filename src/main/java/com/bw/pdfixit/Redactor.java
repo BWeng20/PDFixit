@@ -10,8 +10,13 @@ import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.pdfbox.text.TextPosition;
 
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.Shape;
+import java.awt.Stroke;
+import java.awt.geom.AffineTransform;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
@@ -37,20 +42,42 @@ public final class Redactor {
     }
 
     /**
-     * An area on a page.
+     * An area on a page: a rectangle that may be rotated around its center.
+     * It may reach beyond the page, what is outside is ignored.
      */
     public static class Region {
         /**
          * 1-based page number.
          */
         public final int pageNb;
+        /**
+         * The rectangle in unrotated page coordinates, before the rotation by {@link #angle}.
+         */
         public final Rectangle2D area;
+        /**
+         * Rotation of {@link #area} around its center in radians, clockwise (the y axis points down).
+         */
+        public final double angle;
 
         public Region(int pageNb, Rectangle2D area) {
-            this.pageNb = pageNb;
-            this.area = area;
+            this(pageNb, area, 0);
         }
 
+        public Region(int pageNb, Rectangle2D area, double angle) {
+            this.pageNb = pageNb;
+            this.area = area;
+            this.angle = angle;
+        }
+
+        /**
+         * @return The area with the rotation applied, in unrotated page coordinates.
+         */
+        public Shape getShape() {
+            if (angle == 0)
+                return area;
+            return AffineTransform.getRotateInstance(angle, area.getCenterX(), area.getCenterY())
+                    .createTransformedShape(area);
+        }
     }
 
     /**
@@ -112,7 +139,9 @@ public final class Redactor {
 
     /**
      * Converts a rectangle from the coordinates of the displayed (rotated) page to the unrotated page.
-     * Both are in points with the origin in the upper left corner.
+     * Both are in points with the origin in the upper left corner.<br>
+     * For a rotated area ({@link Region#angle}) convert the rectangle and keep the angle: the width and height
+     * of the rectangle swap with the page rotation, so the angle is the same on the displayed and on the unrotated page.
      *
      * @param view     The rectangle as seen on the rotated page.
      * @param box      The crop box of the page (unrotated).
@@ -214,20 +243,35 @@ public final class Redactor {
      * @param color    Color of the redacted areas.
      */
     public static void redact(PDDocument document, List<Region> regions, int dpi, Color color) throws IOException {
-        TreeMap<Integer, List<Rectangle2D>> byPage = new TreeMap<>();
+        redact(document, regions, dpi, color, false);
+    }
+
+    /**
+     * Redacts the regions. Pages without regions are not touched.
+     *
+     * @param document     The document, modified in place.
+     * @param regions      The regions to redact.
+     * @param dpi          Resolution of the replacement images.
+     * @param color        Color of the redacted areas.
+     * @param antialiasing If true, the edges of rotated areas are smooth. The edge pixels are only partly covered then,
+     *                     so a faint trace of what was below the edge can remain. If false, every pixel that an area
+     *                     touches is fully covered.
+     */
+    public static void redact(PDDocument document, List<Region> regions, int dpi, Color color, boolean antialiasing) throws IOException {
+        TreeMap<Integer, List<Region>> byPage = new TreeMap<>();
         for (Region r : regions) {
             if (r.pageNb < 1 || r.pageNb > document.getNumberOfPages())
                 throw new IllegalArgumentException("Page " + r.pageNb + " is out of range");
-            byPage.computeIfAbsent(r.pageNb, k -> new ArrayList<>()).add(r.area);
+            byPage.computeIfAbsent(r.pageNb, k -> new ArrayList<>()).add(r);
         }
         PDFRenderer renderer = new PDFRenderer(document);
         for (var e : byPage.entrySet()) {
-            redactPage(document, renderer, e.getKey() - 1, e.getValue(), dpi, color);
+            redactPage(document, renderer, e.getKey() - 1, e.getValue(), dpi, color, antialiasing);
         }
     }
 
     private static void redactPage(PDDocument document, PDFRenderer renderer, int pageIndex,
-                                   List<Rectangle2D> areas, int dpi, Color color) throws IOException {
+                                   List<Region> areas, int dpi, Color color, boolean antialiasing) throws IOException {
         final PDPage oldPage = document.getPage(pageIndex);
         final int rotation = oldPage.getRotation();
         final PDRectangle box = oldPage.getCropBox();
@@ -244,13 +288,8 @@ public final class Redactor {
         Graphics2D g = image.createGraphics();
         try {
             g.setColor(color);
-            for (Rectangle2D a : areas) {
-                int x1 = (int) Math.floor(a.getMinX() * scale);
-                int y1 = (int) Math.floor(a.getMinY() * scale);
-                int x2 = (int) Math.ceil(a.getMaxX() * scale);
-                int y2 = (int) Math.ceil(a.getMaxY() * scale);
-                g.fillRect(x1, y1, x2 - x1, y2 - y1);
-            }
+            for (Region region : areas)
+                fill(g, region, scale, antialiasing);
         } finally {
             g.dispose();
         }
@@ -265,6 +304,53 @@ public final class Redactor {
         var pageTree = document.getPages();
         pageTree.insertAfter(newPage, oldPage);
         pageTree.remove(oldPage);
+    }
+
+    /**
+     * Fills a region. Without antialiasing it covers every pixel that the region touches, even partly: something
+     * that is redacted must never stay visible at the edge, so the areas are rounded outwards.
+     */
+    private static void fill(Graphics2D g, Region region, double scale, boolean antialiasing) {
+        if (region.angle == 0) {
+            Rectangle2D a = region.area;
+            int x1 = (int) Math.floor(a.getMinX() * scale);
+            int y1 = (int) Math.floor(a.getMinY() * scale);
+            int x2 = (int) Math.ceil(a.getMaxX() * scale);
+            int y2 = (int) Math.ceil(a.getMaxY() * scale);
+            g.fillRect(x1, y1, x2 - x1, y2 - y1);
+            return;
+        }
+        Shape shape = AffineTransform.getScaleInstance(scale, scale).createTransformedShape(region.getShape());
+        if (antialiasing) {
+            Object aaHint = g.getRenderingHint(RenderingHints.KEY_ANTIALIASING);
+            try {
+                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g.fill(shape);
+            } finally {
+                if (aaHint != null)
+                    g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, aaHint);
+            }
+            return;
+        }
+        Object aa = g.getRenderingHint(RenderingHints.KEY_ANTIALIASING);
+        Object strokeControl = g.getRenderingHint(RenderingHints.KEY_STROKE_CONTROL);
+        Stroke stroke = g.getStroke();
+        try {
+            // No antialiasing: edge pixels must be fully covered, not blended.
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
+            // The default moves strokes to pixel centers, that would shift the edge by up to half a pixel.
+            g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+            g.fill(shape);
+            // A pixel the edge only touches has its center up to ~0.71 pixels away from the edge.
+            g.setStroke(new BasicStroke(2f));
+            g.draw(shape);
+        } finally {
+            g.setStroke(stroke);
+            if (aa != null)
+                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, aa);
+            if (strokeControl != null)
+                g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, strokeControl);
+        }
     }
 
     /**

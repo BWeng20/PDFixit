@@ -278,7 +278,8 @@ public final class PdfStandard {
             if (hasAttachmentsBeforePdfa3(document)) {
                 if (upgradeToPdfa3) {
                     // Embedded files are forbidden before PDF/A-3: declare PDF/A-3 instead of removing them.
-                    changes.putAll(convertTo(document, PdfStandardProfile.PDFA_3B));
+                    // The conformance letter of the document is kept.
+                    changes.putAll(convertTo(document, pdfa3Level(document)));
                     part = 3;
                 } else {
                     upgradeOffered = true;
@@ -393,6 +394,20 @@ public final class PdfStandard {
         if (kids != null)
             for (var kid : kids)
                 collectFiles(kid, out, depth + 1);
+    }
+
+    /**
+     * The PDF/A-3 level that keeps the conformance letter of the document, for a change to PDF/A-3 (an invoice needs
+     * it): a declared level a (1a, 2a, 3a) gives PDF/A-3a, u (2u, 3u) gives PDF/A-3u, everything else (b, PDF/A-4,
+     * no PDF/A at all) PDF/A-3b.
+     */
+    public static PdfStandardProfile pdfa3Level(PDDocument document) {
+        PdfStandardProfile p = profile(document);
+        if (p != null && p.isPdfa() && "A".equals(p.conformance()))
+            return PdfStandardProfile.PDFA_3A;
+        if (p != null && p.isPdfa() && "U".equals(p.conformance()))
+            return PdfStandardProfile.PDFA_3U;
+        return PdfStandardProfile.PDFA_3B;
     }
 
     /**
@@ -982,7 +997,7 @@ public final class PdfStandard {
     /**
      * The sRGB profile of Mustang, or the one of Java if Mustang doesn't contain it (it is no API of Mustang).
      */
-    static InputStream openSrgbProfile() {
+    public static InputStream openSrgbProfile() {
         InputStream is = ZUGFeRDExporterFromA3.class.getClassLoader()
                 .getResourceAsStream(MUSTANG_SRGB_PROFILE);
         if (is != null)

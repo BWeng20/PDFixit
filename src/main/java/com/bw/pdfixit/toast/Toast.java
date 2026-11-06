@@ -90,11 +90,83 @@ public class Toast extends JPanel {
             setOpaque(false);
             setBackground(UIManager.getColor("TextField.background"));
         } else {
-            setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createLineBorder(bc, 2, true),
-                    BorderFactory.createEmptyBorder(5, 5, 5, 3)));
-            setOpaque(true);
+            // Other look and feels have no "Component.borderColor": a soft thin line with round corners,
+            // painted by this class (an opaque panel would fill the corners).
             setBackground(UIManager.getColor("TextField.background"));
+            setBorder(new SoftRoundBorder(softBorderColor(), SOFT_ARC, new Insets(5, 5, 5, 6)));
+            setOpaque(false);
+        }
+    }
+
+    private static final int SOFT_ARC = 16;
+
+    /**
+     * A light line color made from the text and the background color, so it fits every look and feel.
+     */
+    private Color softBorderColor() {
+        Color fg = UIManager.getColor("Label.foreground");
+        Color bg = getBackground();
+        if (fg == null || bg == null)
+            return Color.GRAY;
+        return new Color(
+                (fg.getRed() * 25 + bg.getRed() * 75) / 100,
+                (fg.getGreen() * 25 + bg.getGreen() * 75) / 100,
+                (fg.getBlue() * 25 + bg.getBlue() * 75) / 100);
+    }
+
+    @Override
+    protected void paintComponent(java.awt.Graphics g) {
+        if (!UI.isFlatLaf() && getBorder() instanceof SoftRoundBorder) {
+            // Not opaque: the background has the round corners of the border.
+            java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+            try {
+                g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(getBackground());
+                g2.fill(new java.awt.geom.RoundRectangle2D.Double(0, 0, getWidth(), getHeight(), SOFT_ARC, SOFT_ARC));
+            } finally {
+                g2.dispose();
+            }
+        }
+        super.paintComponent(g);
+    }
+
+    /**
+     * A one pixel line with round corners.
+     */
+    static final class SoftRoundBorder extends javax.swing.border.AbstractBorder {
+        private final Color color;
+        private final int arc;
+        private final Insets insets;
+
+        SoftRoundBorder(Color color, int arc, Insets insets) {
+            this.color = color;
+            this.arc = arc;
+            this.insets = insets;
+        }
+
+        @Override
+        public void paintBorder(Component c, java.awt.Graphics g, int x, int y, int width, int height) {
+            java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+            try {
+                g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setRenderingHint(java.awt.RenderingHints.KEY_STROKE_CONTROL, java.awt.RenderingHints.VALUE_STROKE_PURE);
+                g2.setColor(color);
+                g2.setStroke(new java.awt.BasicStroke(1f));
+                g2.draw(new java.awt.geom.RoundRectangle2D.Double(x + 0.5, y + 0.5, width - 1, height - 1, arc, arc));
+            } finally {
+                g2.dispose();
+            }
+        }
+
+        @Override
+        public Insets getBorderInsets(Component c) {
+            return (Insets) insets.clone();
+        }
+
+        @Override
+        public Insets getBorderInsets(Component c, Insets i) {
+            i.set(insets.top, insets.left, insets.bottom, insets.right);
+            return i;
         }
     }
 
@@ -120,18 +192,20 @@ public class Toast extends JPanel {
 
         if (onClose != null) {
             close.addActionListener(e -> {
-                if (this.closeTimer != null) {
+                if (!closed) {
                     onClose.run();
                 }
 
             });
-            // Auto-close after 5 seconds
-            closeTimer = new Timer(durationMS, e -> {
-                if (this.closeTimer != null) {
-                    onClose.run();
-                }
-            });
-            closeTimer.start();
+            // Auto-close after the duration. Without a duration it stays until it is closed.
+            if (durationMS > 0) {
+                closeTimer = new Timer(durationMS, e -> {
+                    if (!closed) {
+                        onClose.run();
+                    }
+                });
+                closeTimer.start();
+            }
         }
 
         textArea = new JEditorPane();
@@ -249,8 +323,10 @@ public class Toast extends JPanel {
     }
 
     private Timer closeTimer;
+    private boolean closed;
 
     public void cleanUp() {
+        closed = true;
         removeAll();
         if (animation != null)
             animation.abort();

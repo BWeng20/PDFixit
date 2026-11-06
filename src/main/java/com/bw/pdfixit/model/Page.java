@@ -40,6 +40,12 @@ public class Page {
         public BufferedImage image;
         public String error;
 
+        /**
+         * True if the image was placed by a signature function, e.g. Adobe "Fill &amp; Sign"
+         * or as appearance of a signature field.
+         */
+        public boolean signature;
+
         public double x;
         public double y;
 
@@ -47,6 +53,12 @@ public class Page {
         public double scaleY;
 
         public String toString() {
+            if (signature)
+                return "(signature) " + toStringPlain();
+            return toStringPlain();
+        }
+
+        private String toStringPlain() {
             if (image == null)
                 return name + " " + x + "," + y + " scale " + scaleX + " x " + scaleY;
             else

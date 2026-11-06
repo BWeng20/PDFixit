@@ -1,25 +1,13 @@
 package com.bw.pdfixit.ui.fonts;
 
 import com.bw.pdfixit.I18n;
-import com.bw.pdfixit.fonts.ImportedFont;
-import com.bw.pdfixit.fonts.PdfFontEmbedder;
-import com.bw.pdfixit.fonts.ImportedFonts;
 import com.bw.pdfixit.Log;
+import com.bw.pdfixit.fonts.ImportedFont;
+import com.bw.pdfixit.fonts.ImportedFonts;
+import com.bw.pdfixit.fonts.PdfFontEmbedder;
+import com.bw.pdfixit.ui.BoxBorder;
 
-import javax.swing.BorderFactory;
-import javax.swing.DefaultListCellRenderer;
-import javax.swing.DefaultListModel;
-import javax.swing.DefaultListSelectionModel;
-import javax.swing.JButton;
-import javax.swing.JDialog;
-import javax.swing.JFileChooser;
-import javax.swing.JLabel;
-import javax.swing.JList;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.ListSelectionModel;
-import javax.swing.SwingUtilities;
+import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.BorderLayout;
 import java.awt.Component;
@@ -76,7 +64,7 @@ public final class ImportedFontsDialog {
         });
         JScrollPane scroll = new JScrollPane(list);
         scroll.setPreferredSize(new Dimension(560, 200));
-        scroll.setBorder(BorderFactory.createTitledBorder(I18n.t("fonts.imported")));
+        scroll.setBorder(BoxBorder.create(I18n.t("fonts.imported")));
 
         // Read only: the bundled fonts can't be changed, so nothing can be selected.
         DefaultListModel<PdfFontEmbedder.Variant> bundledModel = new DefaultListModel<>();
@@ -104,7 +92,7 @@ public final class ImportedFontsDialog {
         });
         JScrollPane bundledScroll = new JScrollPane(bundledList);
         bundledScroll.setPreferredSize(new Dimension(560, 130));
-        bundledScroll.setBorder(BorderFactory.createTitledBorder(I18n.t("fonts.bundledReadOnly")));
+        bundledScroll.setBorder(BoxBorder.create(I18n.t("fonts.bundledReadOnly")));
 
         JButton add = new JButton(I18n.t("fonts.add"));
         add.setToolTipText(I18n.t("fonts.add.tip"));

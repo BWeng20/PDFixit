@@ -26,6 +26,11 @@ public class Toaster {
      */
     public static int closeDelayMS = 5000;
 
+    /**
+     * Duration for toasts that stay until the user (or {@link #close(Toast)}) closes them.
+     */
+    public static final int UNTIL_CLOSED = 0;
+
 
     /**
      * Initialize a new instance. Each frame should have its own instance.
@@ -56,7 +61,7 @@ public class Toaster {
      * Shows a toast.
      *
      * @param type       The type of toast.
-     * @param durationMS The time (in milliseconds) to stay on screen.
+     * @param durationMS The time (in milliseconds) to stay on screen, {@link #UNTIL_CLOSED} to stay until closed.
      * @param message    The message (should be html). Will be used with "format" if arguments are not empty.
      * @param arguments  The arguments for the "format" call.
      */
@@ -112,6 +117,27 @@ public class Toaster {
         }
         bread.clear();
         layeredPane.repaint();
+    }
+
+    /**
+     * Milliseconds a toast stays on screen after it was closed by {@link #close(Toast)}.
+     */
+    public static int closeFromCodeDelayMS = 2000;
+
+    /**
+     * Closes a toast from code: it stays {@link #closeFromCodeDelayMS} on screen, so the user can still see it, and is
+     * then removed as normal. Does nothing if it is already closed. The close button of the toast closes immediately.
+     */
+    public void close(Toast toast) {
+        if (toast == null || !bread.contains(toast))
+            return;
+        javax.swing.Timer timer = new javax.swing.Timer(closeFromCodeDelayMS, e -> {
+            // The user may have closed it meanwhile.
+            if (bread.contains(toast))
+                removeNotification(toast);
+        });
+        timer.setRepeats(false);
+        timer.start();
     }
 
     private void removeNotification(Toast toast) {

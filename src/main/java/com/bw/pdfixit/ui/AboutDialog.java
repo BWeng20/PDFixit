@@ -5,29 +5,9 @@ import com.bw.pdfixit.BuildVersion;
 import com.bw.pdfixit.I18n;
 import com.bw.pdfixit.Log;
 
-import javax.swing.BorderFactory;
-import javax.swing.JButton;
-import javax.swing.JDialog;
-import javax.swing.JEditorPane;
-import javax.swing.JLabel;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTextArea;
-import javax.swing.SwingConstants;
-import javax.swing.SwingUtilities;
+import javax.swing.*;
 import javax.swing.event.HyperlinkEvent;
-import java.awt.BorderLayout;
-import java.awt.Component;
-import java.awt.Cursor;
-import java.awt.Desktop;
-import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Font;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Insets;
-import java.awt.Toolkit;
+import java.awt.*;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -52,17 +32,38 @@ public final class AboutDialog {
         gc.gridy = 0;
         gc.anchor = GridBagConstraints.WEST;
 
-        JLabel title = new JLabel(AboutInfo.NAME + " " + BuildVersion.VERSION);
+        // Name, build and description.
+        JPanel texts = new JPanel(new GridBagLayout());
+        GridBagConstraints tc = new GridBagConstraints();
+        tc.gridx = 0;
+        tc.gridy = 0;
+        tc.fill = GridBagConstraints.HORIZONTAL;
+        tc.weightx = 1;
+        tc.anchor = GridBagConstraints.WEST;
+        HtmlLabel title = new HtmlLabel(AboutInfo.NAME + " " + BuildVersion.VERSION);
         title.setFont(title.getFont().deriveFont(Font.BOLD, title.getFont().getSize2D() * 1.8f));
-        content.add(title, gc);
+        texts.add(title, tc);
 
-        gc.gridy++;
-        gc.insets = new Insets(2, 0, 0, 0);
-        content.add(new JLabel(I18n.t("about.buildDate", BuildVersion.BUILD_DATE)), gc);
+        tc.gridy++;
+        HtmlLabel subtitle = new HtmlLabel(I18n.t("app.subtitle"));
+        subtitle.setFont(subtitle.getFont().deriveFont(Font.BOLD, subtitle.getFont().getSize2D() * 1.2f));
+        texts.add(subtitle, tc);
 
-        gc.gridy++;
-        gc.insets = new Insets(8, 0, 0, 0);
-        content.add(new JLabel("<html><body style=\"width:525px\">" + I18n.t("about.description") + "</body></html>"), gc);
+        tc.gridy++;
+        tc.insets = new Insets(6, 0, 0, 0);
+        texts.add(new HtmlLabel(I18n.t("about.buildDate", BuildVersion.BUILD_DATE)), tc);
+
+        tc.gridy++;
+        tc.insets = new Insets(8, 0, 0, 0);
+        texts.add(new HtmlLabel("<html><body style=\"width:525px\">" + I18n.t("about.description") + "</body></html>"), tc);
+
+        JPanel head = new JPanel(new BorderLayout(24, 0));
+        head.add(texts, BorderLayout.CENTER);
+        gc.fill = GridBagConstraints.HORIZONTAL;
+        gc.weightx = 1;
+        content.add(head, gc);
+        gc.fill = GridBagConstraints.NONE;
+        gc.weightx = 0;
 
         gc.gridy++;
         gc.insets = new Insets(14, 0, 0, 0);
@@ -133,7 +134,16 @@ public final class AboutDialog {
                 sb.append("<a href=\"").append(c.licenseUrl()).append("\">").append(escape(c.license())).append("</a>");
             sb.append("</td></tr>");
         }
-        return sb.append("</table></body></html>").toString();
+        sb.append("</table><br><b>" + I18n.t("about.data") + "</b><table cellspacing=\"0\" cellpadding=\"2\">");
+        for (AboutInfo.DataSource d : AboutInfo.DATA) {
+            sb.append("<tr><td valign='top'>").append(escape(d.name()));
+            if (!d.version().isEmpty())
+                sb.append(' ').append(escape(d.version()));
+            sb.append("</td><td valign='top'>&nbsp;&nbsp;<a href=\"").append(d.url()).append("\">").append(escape(d.publisher()))
+                    .append("</a></td></tr>");
+        }
+        sb.append("</table><p>").append(escape(I18n.t("about.en16931"))).append("</p>");
+        return sb.append("</body></html>").toString();
     }
 
     private static void browse(String url) {

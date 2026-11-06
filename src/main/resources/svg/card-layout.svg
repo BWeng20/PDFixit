@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+    <!-- Card "Edit template layout": a letterhead page with the target regions of the fields. -->
+    <path fill="#FFFFFF" stroke="#6B7785" stroke-width="2" stroke-linejoin="round" d="M10,4 H31 L39,12 V44 H10 Z"/>
+    <path fill="#E4E9EF" stroke="#6B7785" stroke-width="2" stroke-linejoin="round" d="M31,4 V12 H39"/>
+    <rect x="14" y="16" width="12" height="7" rx="1" fill="#CFE3F7" stroke="#4A7FC1" stroke-width="1.6"/>
+    <rect x="14" y="27" width="21" height="13" rx="1" fill="#CFEDEA" stroke="#2E9C94" stroke-width="1.6"/>
+    <circle cx="33" cy="20" r="1.6" fill="#4A7FC1"/>
+</svg>

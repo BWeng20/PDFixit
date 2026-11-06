@@ -41,7 +41,7 @@ public class VerificationResultPanel extends JPanel {
     private List<ValidationResult.Finding> findings = List.of();
     private final JTable table;
     private final JScrollPane tableScroll;
-    private final JLabel message = new JLabel();
+    private final HtmlLabel message = new HtmlLabel();
     private final JPanel center = new JPanel(new BorderLayout());
     /**
      * The text of the result for the clipboard.

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+    <!-- Symbol of the small round button that fits the pages to the width of the view (RoundSvgButton): an arrow to
+         both sides between two bars. The color is the foreground color of the button. -->
+    <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+          d="M5,7 V17 M19,7 V17 M8,12 H16 M10.5,9.5 L8,12 L10.5,14.5 M13.5,9.5 L16,12 L13.5,14.5"/>
+</svg>

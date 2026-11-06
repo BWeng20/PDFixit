@@ -1,32 +1,17 @@
 package com.bw.pdfixit.ui.fonts;
 
 import com.bw.pdfixit.I18n;
+import com.bw.pdfixit.Log;
 import com.bw.pdfixit.fonts.FontSource;
 import com.bw.pdfixit.fonts.ImportedFont;
 import com.bw.pdfixit.fonts.ImportedFonts;
-import com.bw.pdfixit.Log;
-import org.apache.pdfbox.cos.COSDictionary;
 import com.bw.pdfixit.fonts.PdfFontEmbedder;
 import com.bw.pdfixit.fonts.PdfFontMerger;
 import com.bw.pdfixit.fonts.PdfFonts;
 import com.bw.pdfixit.model.DocumentProxy;
+import org.apache.pdfbox.cos.COSDictionary;
 
-import javax.swing.BorderFactory;
-import javax.swing.DefaultComboBoxModel;
-import javax.swing.DefaultListCellRenderer;
-import javax.swing.JButton;
-import javax.swing.JComboBox;
-import javax.swing.JDialog;
-import javax.swing.JLabel;
-import javax.swing.JList;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTable;
-import javax.swing.JTextArea;
-import javax.swing.ListSelectionModel;
-import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
+import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -53,6 +38,7 @@ public final class FontsDialog {
     private static String[] columns() {
         return new String[]{I18n.t("fonts.col.font"), I18n.t("fonts.col.type"), I18n.t("fonts.col.embedded"), I18n.t("fonts.col.pages")};
     }
+
     /**
      * Filler text for the preview: running text, digits, and the most common symbols and accents of Latin text.
      */

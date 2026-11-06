@@ -5,21 +5,7 @@ import com.bw.pdfixit.Log;
 import com.bw.pdfixit.PdfStandard;
 import com.bw.pdfixit.PdfStandardProfile;
 
-import javax.swing.BorderFactory;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.ButtonGroup;
-import javax.swing.JButton;
-import javax.swing.JComboBox;
-import javax.swing.JComponent;
-import javax.swing.JDialog;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JRadioButton;
-import javax.swing.KeyStroke;
-import javax.swing.SwingUtilities;
-import javax.swing.SwingWorker;
-import javax.swing.UIManager;
+import javax.swing.*;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dialog;
@@ -59,23 +45,32 @@ public final class StandardDialog extends JDialog {
     private final PdfStandardProfile current;
     private final float currentVersion;
     /**
+     * The level that is selected when the dialog opens, null for the current one.
+     */
+    private final PdfStandardProfile preselected;
+    /**
      * The document declares a level a but has no structure: applying the level again adds the formal one.
      */
     private final boolean needsTags;
     private static final Float[] VERSIONS = {1.4f, 1.5f, 1.6f, 1.7f, 2.0f};
     private final JComboBox<Float> versions = new JComboBox<>();
-    private final JLabel hints = new JLabel();
+    /**
+     * Selectable: the errors may be copied. The icon is in {@link #hintsIcon}.
+     */
+    private final HtmlLabel hints = new HtmlLabel();
+    private final JLabel hintsIcon = new JLabel();
     private final JButton apply = new JButton(I18n.t("common.apply"));
     private final List<JRadioButton> radios = new ArrayList<>();
     private final List<PdfStandardProfile> radioProfiles = new ArrayList<>();
     private SwingWorker<Hints, Void> worker;
     private Choice choice;
 
-    private StandardDialog(Window owner, byte[] pdf, PdfStandardProfile current, float version) {
+    private StandardDialog(Window owner, byte[] pdf, PdfStandardProfile current, float version, PdfStandardProfile preselected) {
         super(owner, I18n.t("ui.standard.title"), Dialog.ModalityType.APPLICATION_MODAL);
         this.pdf = pdf;
         this.current = current;
         this.currentVersion = version;
+        this.preselected = preselected;
         boolean tags;
         try (var document = org.apache.pdfbox.Loader.loadPDF(pdf)) {
             tags = PdfStandard.needsFormalTags(document, current);
@@ -101,8 +96,20 @@ public final class StandardDialog extends JDialog {
      */
     public static Choice showDialog(Component parent, byte[] pdf, PdfStandardProfile current,
                                     float version) {
+        return showDialog(parent, pdf, current, version, null);
+    }
+
+    /**
+     * Shows the dialog (modal) with a level selected.
+     *
+     * @param preselected The level that is selected at the start, null for the current one. For a PDF/A-3 level the
+     *                    version is 1.7 if the document has a later one: PDF/A-3 is based on PDF 1.7.
+     * @see #showDialog(Component, byte[], PdfStandardProfile, float)
+     */
+    public static Choice showDialog(Component parent, byte[] pdf, PdfStandardProfile current,
+                                    float version, PdfStandardProfile preselected) {
         Window owner = parent instanceof Window w ? w : SwingUtilities.getWindowAncestor(parent);
-        StandardDialog dialog = new StandardDialog(owner, pdf, current, version);
+        StandardDialog dialog = new StandardDialog(owner, pdf, current, version, preselected);
         dialog.setLocationRelativeTo(owner);
         dialog.setVisible(true);
         return dialog.choice;
@@ -135,6 +142,8 @@ public final class StandardDialog extends JDialog {
         if (!List.of(VERSIONS).contains(cur))
             versions.insertItemAt(cur, 0);
         versions.setSelectedItem(cur);
+        if (preselected != null && preselected.isPdfa() && preselected.part() == 3 && cur > 1.7f)
+            versions.setSelectedItem(1.7f);
         versions.setRenderer((jl, value, index, sel, focus) -> {
             JLabel l = new JLabel(String.format(Locale.ROOT, "%.1f", value));
             l.setOpaque(true);
@@ -151,10 +160,13 @@ public final class StandardDialog extends JDialog {
         content.remove(list);
         content.add(top, BorderLayout.NORTH);
 
-        hints.setVerticalAlignment(JLabel.TOP);
-        hints.setPreferredSize(new Dimension(520, 190));
-        hints.setBorder(BorderFactory.createTitledBorder(I18n.t("standard.whatHappens")));
-        content.add(hints, BorderLayout.CENTER);
+        JPanel hintsPanel = new JPanel(new BorderLayout(10, 0));
+        hintsPanel.setPreferredSize(new Dimension(520, 190));
+        hintsPanel.setBorder(BoxBorder.create(I18n.t("standard.whatHappens")));
+        hintsIcon.setVerticalAlignment(JLabel.TOP);
+        hintsPanel.add(hintsIcon, BorderLayout.WEST);
+        hintsPanel.add(hints, BorderLayout.CENTER);
+        content.add(hintsPanel, BorderLayout.CENTER);
 
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         apply.addActionListener(e -> {
@@ -167,8 +179,9 @@ public final class StandardDialog extends JDialog {
         buttons.add(cancel);
         content.add(buttons, BorderLayout.SOUTH);
 
+        final PdfStandardProfile start = preselected != null ? preselected : current;
         for (int i = 0; i < radios.size(); ++i)
-            if (radioProfiles.get(i) == current)
+            if (radioProfiles.get(i) == start)
                 radios.get(i).setSelected(true);
         update();
         return content;
@@ -177,7 +190,7 @@ public final class StandardDialog extends JDialog {
     private static JPanel column(String title) {
         JPanel column = new JPanel();
         column.setLayout(new BoxLayout(column, BoxLayout.Y_AXIS));
-        column.setBorder(BorderFactory.createTitledBorder(title));
+        column.setBorder(BoxBorder.create(title));
         return column;
     }
 
@@ -225,12 +238,12 @@ public final class StandardDialog extends JDialog {
         versions.setEnabled(target == null || !target.isPdfa() || target.part() != 4);
         if (target == current && version == null && !needsTags) {
             apply.setEnabled(false);
-            hints.setIcon(null);
+            hintsIcon.setVisible(false);
             hints.setText(I18n.t("standard.isCurrent"));
             return;
         }
         apply.setEnabled(false);
-        hints.setIcon(null);
+        hintsIcon.setVisible(false);
         hints.setText(I18n.t("standard.calculating"));
         worker = new SwingWorker<>() {
             @Override
@@ -289,9 +302,10 @@ public final class StandardDialog extends JDialog {
         // on every background.
         boolean warn = result.error() != null || !result.impact().lost().isEmpty()
                 || !result.impact().notRepaired().isEmpty();
-        hints.setIcon(warn ? UIManager.getIcon(result.error() != null ? "OptionPane.errorIcon" : "OptionPane.warningIcon")
+        hintsIcon.setIcon(warn ? UIManager.getIcon(result.error() != null ? "OptionPane.errorIcon" : "OptionPane.warningIcon")
                 : null);
-        hints.setIconTextGap(10);
+        // Without an icon no gap before the text.
+        hintsIcon.setVisible(warn);
         apply.setEnabled(result.error() == null);
     }
 }

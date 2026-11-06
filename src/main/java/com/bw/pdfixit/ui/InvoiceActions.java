@@ -1,57 +1,50 @@
 package com.bw.pdfixit.ui;
 
-import java.awt.BorderLayout;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
 import com.bw.pdfixit.I18n;
 import com.bw.pdfixit.Log;
-import com.bw.pdfixit.Preferences;
+import com.bw.pdfixit.PdfStandard;
 import com.bw.pdfixit.ValidationResult;
 import com.bw.pdfixit.invoice.EInvoice;
 import com.bw.pdfixit.model.DocumentProxy;
 import com.bw.pdfixit.toast.ToastType;
 import com.bw.pdfixit.toast.Toaster;
-import com.bw.pdfixit.ui.invoice.InvoiceDialog;
-import com.bw.pdfixit.ui.invoice.InvoiceEditorDialog;
-import com.bw.pdfixit.ui.invoice.PartySettingsDialog;
 import com.bw.pdfixit.ui.invoice.ValidationDialog;
 
-import javax.swing.*;
+import org.apache.pdfbox.pdmodel.PDDocument;
+
+import javax.swing.JLabel;
+import javax.swing.JMenu;
+import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import javax.swing.event.MenuEvent;
 import javax.swing.event.MenuListener;
-import javax.swing.filechooser.FileNameExtensionFilter;
+import java.awt.BorderLayout;
 import java.awt.Font;
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.util.function.Supplier;
+import java.util.concurrent.ExecutionException;
 
 /**
- * The validation and e-invoice (ZUGFeRD/Factur-X) menus of the {@link UI} and their actions.
+ * The validation and e-invoice (ZUGFeRD/Factur-X) menus of the {@link UI} and their actions.<br>
+ * The invoice of the document is checked automatically, in the background, when the document is loaded or its content
+ * changes. A check never changes the document. The result is the status line of the box "Invoice in the document", it
+ * says nothing about the draft in the editor (that is checked when it is applied).
  */
 final class InvoiceActions {
 
-    private final String ATTACH_INVOICE = I18n.t("invoice.attach");
-    private final String ATTACH_INVOICE_TOOLTIP =
-            I18n.t("invoice.attach.tip");
-
     private final UI ui;
-    private final Supplier<DocumentProxy> proxySupplier;
-    private final Supplier<Toaster> toasterSupplier;
+    private DocumentProxy proxy;
+    private final Toaster toaster;
 
-    InvoiceActions(UI ui, Supplier<DocumentProxy> proxySupplier, Supplier<Toaster> toasterSupplier) {
+    InvoiceActions(UI ui, Toaster toaster) {
         this.ui = ui;
-        this.proxySupplier = proxySupplier;
-        this.toasterSupplier = toasterSupplier;
+        this.toaster = toaster;
     }
 
-    private DocumentProxy proxy() {
-        return proxySupplier.get();
-    }
 
-    private Toaster toaster() {
-        return toasterSupplier.get();
-    }
 
     /**
      * Creates the menu with the validations of the current document. None of them changes the document.
@@ -61,17 +54,12 @@ final class InvoiceActions {
         JMenuItem pdfa = new JMenuItem(I18n.t("menu.validation.pdfa"));
         pdfa.setToolTipText(I18n.t("menu.validation.pdfa.tip"));
         pdfa.addActionListener(e -> doValidatePdfa());
-        JMenuItem invoice = new JMenuItem(I18n.t("menu.validation.invoice"));
-        invoice.setToolTipText(I18n.t("menu.validation.invoice.tip"));
-        invoice.addActionListener(e -> doValidateInvoice());
         menu.add(pdfa);
-        menu.add(invoice);
         menu.addMenuListener(new MenuListener() {
             @Override
             public void menuSelected(MenuEvent e) {
-                boolean hasDocument = proxy() != null && proxy().getDocument() != null;
+                boolean hasDocument = proxy != null && proxy.getDocument() != null;
                 pdfa.setEnabled(hasDocument);
-                invoice.setEnabled(hasDocument);
             }
 
             @Override
@@ -85,62 +73,140 @@ final class InvoiceActions {
         return menu;
     }
 
+    private boolean hasDocument;
+    private boolean hasInvoice;
     /**
-     * Creates the menu with the e-invoice (ZUGFeRD/Factur-X) actions.
+     * The document has no PDF/A-3 declaration: it can't have a valid invoice, the editor is locked until it is converted.
      */
-    JMenu createInvoiceMenu() {
-        JMenu menu = new JMenu(I18n.t("menu.invoice"));
+    private boolean needsConversion;
 
-        JMenuItem show = new JMenuItem(I18n.t("menu.invoice.show"));
-        show.addActionListener(e -> doShowInvoice());
-        JMenuItem edit = new JMenuItem(I18n.t("menu.invoice.create"));
-        edit.addActionListener(e -> doEditInvoice());
-        JMenuItem save = new JMenuItem(I18n.t("menu.invoice.save"));
-        save.addActionListener(e -> doSaveInvoiceXml());
-        JMenuItem attach = new JMenuItem(ATTACH_INVOICE);
-        attach.setToolTipText(ATTACH_INVOICE_TOOLTIP);
-        attach.addActionListener(e -> doAttachInvoiceXml());
-        JMenuItem remove = new JMenuItem(I18n.t("ui.invoice.remove"));
-        remove.addActionListener(e -> doRemoveInvoice());
+    /**
+     * The check of the invoice of the document and the content generation of the document it was made for, see
+     * {@link DocumentProxy#getContentGeneration()}. Rotating, moving or deleting pages doesn't change the generation,
+     * so the result stays. The generation is -1 if there is no result (yet). The result is null if the check failed.
+     */
+    private EInvoice.Validation documentCheck;
+    private int documentCheckGeneration = -1;
+    /**
+     * The result that is shown now, for the details.
+     */
+    private EInvoice.Validation shownCheck;
+    /**
+     * The check is running.
+     */
+    private boolean checking;
 
-        menu.add(show);
-        menu.add(edit);
-        menu.addSeparator();
-        menu.add(save);
-        menu.add(attach);
-        menu.add(remove);
-        menu.addSeparator();
-        JMenuItem parties = new JMenuItem(I18n.t("menu.invoice.parties"));
-        parties.setToolTipText(I18n.t("menu.invoice.parties.tip"));
-        parties.addActionListener(e -> PartySettingsDialog.showDialog(ui));
-        menu.add(parties);
+    /**
+     * The document was loaded, changed or closed. Call it on the event dispatch thread.
+     *
+     * @param loaded      If the document was just loaded (or closed): the invoice editor shows it, changes of the editor
+     *                    for the document before are discarded. Otherwise the document only changed.
+     */
+    void documentChanged(DocumentProxy proxy, boolean loaded) {
+        if (proxy != this.proxy || loaded) {
+            // Another document: the result of the document before doesn't apply.
+            documentCheck = null;
+            documentCheckGeneration = -1;
+        }
+        this.proxy = proxy;
+        PDDocument document = proxy != null ? proxy.getDocument(): null;
+        this.hasDocument = document != null;
+        this.hasInvoice = hasDocument && EInvoice.hasInvoice(document);
+        this.needsConversion = EInvoice.needsConversion(document);
+        // The invoice needs PDF/A-3. If the document is something else, the editor is locked until it is converted.
+        ui.invoiceEditor.documentChanged(proxy, loaded);
+        updateInvoiceControls();
+        checkIfMissing();
+    }
 
-        menu.addMenuListener(new MenuListener() {
+    /**
+     * Starts the check of the invoice of the document if there is none for the current content, in the background.
+     * There is only one check at a time.
+     */
+    private void checkIfMissing() {
+        if (checking || !hasInvoice || needsConversion || proxy == null)
+            return;
+        final int generation = proxy.getContentGeneration();
+        if (generation == documentCheckGeneration)
+            return;
+        final DocumentProxy checked = proxy;
+        checking = true;
+        updateInvoiceControls();
+        new SwingWorker<EInvoice.Validation, Void>() {
             @Override
-            public void menuSelected(MenuEvent e) {
-                boolean hasDocument = proxy() != null && proxy().getDocument() != null;
-                boolean hasInvoice = hasDocument && EInvoice.hasInvoice(proxy().getDocument());
-                show.setEnabled(hasInvoice);
-                save.setEnabled(hasInvoice);
-                remove.setEnabled(hasInvoice);
-
-                attach.setEnabled(hasDocument);
-                edit.setEnabled(hasDocument);
-                edit.setText(hasInvoice ? I18n.t("menu.invoice.edit") : I18n.t("menu.invoice.create"));
-                edit.setToolTipText(I18n.t("menu.invoice.create.tip"));
-                attach.setText(ATTACH_INVOICE);
-                attach.setToolTipText(ATTACH_INVOICE_TOOLTIP);
+            protected EInvoice.Validation doInBackground() throws Exception {
+                return EInvoice.validate(checked.getBytes(), "current document");
             }
 
             @Override
-            public void menuDeselected(MenuEvent e) {
+            protected void done() {
+                checking = false;
+                EInvoice.Validation result = null;
+                try {
+                    result = get();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (ExecutionException e) {
+                    Exception cause = e.getCause() instanceof Exception ex ? ex : e;
+                    invoiceError(I18n.t("invoice.validationFailed"), cause);
+                }
+                // Not for another document than the one that was checked. A failed check is not repeated for the same
+                // content, there is no result then.
+                if (checked == proxy) {
+                    documentCheck = result;
+                    documentCheckGeneration = generation;
+                }
+                updateInvoiceControls();
+                // The content may have changed meanwhile.
+                checkIfMissing();
             }
+        }.execute();
+    }
 
-            @Override
-            public void menuCanceled(MenuEvent e) {
+    /**
+     * Sets the status line of the box "Invoice in the document" ({@link InvoicePanel}): there is no document, it needs
+     * PDF/A-3, it has no invoice, or the result of the automatic check of its invoice.
+     */
+    private void updateInvoiceControls() {
+        ui.validatePdfaButton.setEnabled(hasDocument);
+
+        shownCheck = null;
+        String text;
+        String toolTip = null;
+        if (!hasDocument) {
+            text = I18n.t("invoice.state.noDocument");
+            toolTip = I18n.t("invoice.state.noDocument.tip");
+        } else if (needsConversion) {
+            text = I18n.t("invoice.state.convert");
+            toolTip = I18n.t("invoice.state.convert.tip");
+        } else if (!hasInvoice) {
+            text = I18n.t("ui.invoice.status.none");
+        } else {
+            if (documentCheckGeneration == proxy.getContentGeneration())
+                shownCheck = documentCheck;
+            if (shownCheck == null) {
+                text = I18n.t(checking ? "ui.invoice.status.checking" : "ui.invoice.status.present");
+            } else if (!shownCheck.valid()) {
+                text = I18n.t("ui.invoice.status.invalid", ValidationDialog.summary(shownCheck));
+            } else {
+                int warnings = ValidationDialog.count(shownCheck)[1];
+                text = warnings > 0 ? I18n.t("ui.invoice.status.validWarnings", I18n.t("ui.invoice.warnings", warnings))
+                        : I18n.t("ui.invoice.status.valid");
             }
-        });
-        return menu;
+        }
+        // The line can be cut off when it is long: the tooltip has all of it.
+        ui.invoiceStatus.setToolTipText(toolTip != null ? toolTip : text);
+        ui.invoiceStatus.setIcon(shownCheck == null ? null : UI.getIcon(shownCheck.valid() ? "svg/status-ok" : "svg/status-error"));
+        ui.invoiceStatus.setText(text);
+        ui.invoiceDetailsButton.setVisible(shownCheck != null);
+    }
+
+    /**
+     * Shows the messages and the report of the result that is shown.
+     */
+    void doShowValidationDetails() {
+        if (shownCheck != null)
+            ValidationDialog.showDialog(ui, shownCheck);
     }
 
     private void showText(String title, String text) {
@@ -160,69 +226,24 @@ final class InvoiceActions {
         Log.exception(e);
         String message = e.getMessage() == null ? e.toString() : e.getMessage();
         if (message.length() > 80 || message.indexOf('\n') >= 0) {
-            toaster().toast(ToastType.ERROR, 10000,
+            toaster.toast(ToastType.ERROR, 10000,
                     I18n.t("invoice.seeDetails"), what);
             SwingUtilities.invokeLater(() -> showText(what, message));
         } else {
-            toaster().toast(ToastType.ERROR, 20000,
+            toaster.toast(ToastType.ERROR, 20000,
                     "<html><font size='+2'>%s</font><br><font size='+1'><i>%s</i></font></html>", what, message);
         }
-    }
-
-    private void doShowInvoice() {
-        if (proxy() == null || proxy().getDocument() == null)
-            return;
-        try {
-            var xml = EInvoice.extractXml(proxy().getDocument());
-            if (xml.isEmpty()) {
-                toaster().toast(ToastType.INFO, 5000, I18n.t("toast.noInvoice"));
-                return;
-            }
-            InvoiceDialog.showDialog(ui, xml.get());
-        } catch (IOException e) {
-            invoiceError(I18n.t("invoice.readFailed"), e);
-        }
-    }
-
-    /**
-     * Opens the invoice editor. Edits the existing invoice of the document or creates a new one.
-     */
-    private void doEditInvoice() {
-        if (proxy() == null || proxy().getDocument() == null)
-            return;
-        byte[] xml;
-        try {
-            xml = EInvoice.extractXml(proxy().getDocument()).orElse(null);
-        } catch (IOException e) {
-            invoiceError(I18n.t("invoice.readFailed"), e);
-            return;
-        }
-        if (InvoiceEditorDialog.showDialog(ui, xml, proxy()))
-            toaster().toast(ToastType.SUCCESS, 5000, xml == null ? I18n.t("toast.invoice.attached") : I18n.t("toast.invoice.updated"));
-    }
-
-    void doValidateInvoice() {
-        if (proxy() == null || proxy().getDocument() == null)
-            return;
-        ui.runInBusy(() -> {
-            try {
-                EInvoice.Validation v = EInvoice.validate(proxy().getBytes(), "current document");
-                SwingUtilities.invokeLater(() -> ValidationDialog.showDialog(ui, v));
-            } catch (Exception e) {
-                invoiceError(I18n.t("invoice.validationFailed"), e);
-            }
-        });
     }
 
     /**
      * Checks the document with veraPDF, independent of the PDF/A level, and shows the result.
      */
     void doValidatePdfa() {
-        if (proxy() == null || proxy().getDocument() == null)
+        if (proxy == null || proxy.getDocument() == null)
             return;
         ui.runInBusy(() -> {
             try {
-                ValidationResult result = proxy().validatePdfa();
+                ValidationResult result = proxy.validatePdfa();
                 SwingUtilities.invokeLater(() -> {
                     VerificationResultPanel panel = new VerificationResultPanel();
                     panel.setResult(result);
@@ -252,66 +273,5 @@ final class InvoiceActions {
                 invoiceError(I18n.t("invoice.validationFailed"), e);
             }
         });
-    }
-
-    private File chooseXml(boolean save) {
-        JFileChooser chooser = new JFileChooser();
-        String lastDir = UI.getPref(Preferences.USER_PREF_LAST_PDF_DIR, null);
-        if (lastDir != null)
-            chooser.setCurrentDirectory(new File(lastDir));
-        chooser.setFileFilter(new FileNameExtensionFilter("XML", "xml"));
-        chooser.setMultiSelectionEnabled(false);
-        if (save) {
-            chooser.setDialogTitle(I18n.t("menu.invoice.save"));
-            chooser.setSelectedFile(new File(chooser.getCurrentDirectory(), "factur-x.xml"));
-        } else {
-            chooser.setDialogTitle(I18n.t("chooser.invoiceXml"));
-        }
-        int result = save ? chooser.showSaveDialog(ui) : chooser.showOpenDialog(ui);
-        return result == JFileChooser.APPROVE_OPTION ? chooser.getSelectedFile() : null;
-    }
-
-    private void doSaveInvoiceXml() {
-        if (proxy() == null || proxy().getDocument() == null)
-            return;
-        try {
-            var xml = EInvoice.extractXml(proxy().getDocument());
-            if (xml.isEmpty())
-                return;
-            File file = chooseXml(true);
-            if (file != null && (!file.exists() || UI.askOverwrite(ui, file.toPath()))) {
-                Files.write(file.toPath(), xml.get());
-                toaster().toast(ToastType.SUCCESS, 5000, I18n.t("toast.invoice.stored"), file.getName());
-            }
-        } catch (IOException e) {
-            invoiceError(I18n.t("invoice.storeFailed"), e);
-        }
-    }
-
-    private void doAttachInvoiceXml() {
-        if (proxy() == null || proxy().getDocument() == null)
-            return;
-        File file = chooseXml(false);
-        if (file != null) {
-            ui.runInBusy(() -> {
-                try {
-                    proxy().attachInvoice(Files.readAllBytes(file.toPath()));
-                    toaster().toast(ToastType.SUCCESS, 5000, I18n.t("toast.invoice.attachedFile"), file.getName());
-                } catch (Exception e) {
-                    invoiceError(I18n.t("invoice.attachFailed"), e);
-                }
-            });
-        }
-    }
-
-    private void doRemoveInvoice() {
-        if (proxy() == null || proxy().getDocument() == null)
-            return;
-        try {
-            if (proxy().removeInvoice())
-                toaster().toast(ToastType.SUCCESS, 5000, I18n.t("toast.invoice.removed"));
-        } catch (IOException e) {
-            invoiceError(I18n.t("ui.invoice.removeFailed"), e);
-        }
     }
 }

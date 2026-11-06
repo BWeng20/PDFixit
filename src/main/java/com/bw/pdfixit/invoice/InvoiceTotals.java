@@ -315,6 +315,29 @@ final class InvoiceTotals {
     }
 
     /**
+     * The VAT breakdown as it is in the XML.
+     */
+    static List<InvoiceData.VatBreakdown> breakdown(Element root) {
+        List<InvoiceData.VatBreakdown> result = new ArrayList<>();
+        Element settlement = find(root, "SupplyChainTradeTransaction", "ApplicableHeaderTradeSettlement");
+        for (Element t : children(settlement, "ApplicableTradeTax"))
+            result.add(new InvoiceData.VatBreakdown(text(t, "CategoryCode"), decimal(text(t, "RateApplicablePercent")),
+                    orZero(decimal(text(t, "BasisAmount"))), orZero(decimal(text(t, "CalculatedAmount")))));
+        return result;
+    }
+
+    /**
+     * The net totals of the items as they are in the XML, in the order of the items (null for an item without).
+     */
+    static List<BigDecimal> lineTotals(Element root) {
+        List<BigDecimal> result = new ArrayList<>();
+        for (Element line : children(find(root, "SupplyChainTradeTransaction"), "IncludedSupplyChainTradeLineItem"))
+            result.add(decimal(text(line, "SpecifiedLineTradeSettlement", "SpecifiedTradeSettlementLineMonetarySummation",
+                    "LineTotalAmount")));
+        return result;
+    }
+
+    /**
      * For tests: all VAT categories of the breakdown.
      */
     static List<String> categories(Element root) {

@@ -6,24 +6,9 @@ import com.bw.pdfixit.invoice.InvoiceData;
 import com.bw.pdfixit.invoice.Party;
 import com.bw.pdfixit.invoice.PartyPresets;
 import com.bw.pdfixit.invoice.Role;
+import com.bw.pdfixit.ui.HtmlLabel;
 
-import javax.swing.BorderFactory;
-import javax.swing.Box;
-import javax.swing.DefaultListCellRenderer;
-import javax.swing.DefaultListModel;
-import javax.swing.JButton;
-import javax.swing.JCheckBox;
-import javax.swing.JComponent;
-import javax.swing.JDialog;
-import javax.swing.JLabel;
-import javax.swing.JList;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.KeyStroke;
-import javax.swing.ListSelectionModel;
-import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
+import javax.swing.*;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dialog;
@@ -55,6 +40,7 @@ public class PartySettingsDialog extends JDialog {
     }
 
     private final Path file;
+
     /**
      * Outcome of the dialog.
      *
@@ -156,7 +142,7 @@ public class PartySettingsDialog extends JDialog {
         editorPanel.add(editor, BorderLayout.NORTH);
         center.add(editorPanel, BorderLayout.CENTER);
 
-        JLabel location = new JLabel(I18n.t("party.storedIn", file.toAbsolutePath()));
+        HtmlLabel location = new HtmlLabel(I18n.t("party.storedIn", file.toAbsolutePath()));
         location.setForeground(UIManager.getColor("Label.disabledForeground"));
         JButton save = new JButton(I18n.t("common.save"));
         save.addActionListener(e -> save());

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+    <!-- Symbol of the small round button above the page counter (RoundSvgButton): a chevron, selects the previous page.
+         The color is the foreground color of the button. -->
+    <path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
+          d="M7,14.5 L12,9.5 L17,14.5"/>
+</svg>

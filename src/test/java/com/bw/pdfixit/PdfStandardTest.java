@@ -34,8 +34,9 @@ class PdfStandardTest {
 
     @Test
     void test_invoice() throws Exception {
+        // The document declares PDF/A-3b: the invoice keeps the letter.
         String d = describe(EInvoice.attachXml(PdfaVersionsTest.pdfa(3), EInvoiceTest.sampleXml()));
-        Assertions.assertTrue(d.contains("PDF/A-3u"), d);
+        Assertions.assertTrue(d.contains("PDF/A-3b"), d);
         Assertions.assertTrue(d.endsWith("Factur-X"), d);
     }
 

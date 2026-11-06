@@ -1,5 +1,6 @@
 package com.bw.pdfixit.cli;
 
+import com.bw.pdfixit.DocumentInformation;
 import com.bw.pdfixit.I18n;
 import com.bw.pdfixit.invoice.EInvoice;
 import com.bw.pdfixit.Log;
@@ -99,7 +100,7 @@ public class CommandExecuter {
         }
         Preferences prefs = Preferences.getInstance();
         final boolean tagged = PdfRisk.isTagged(document);
-        Redactor.redact(document, regions, prefs.getDpi(), prefs.getRedactionColor());
+        Redactor.redact(document, regions, prefs.getDpi(), prefs.getRedactionColor(), prefs.isRedactionAntialiasing());
         if (!regions.isEmpty())
             documentProxy.reportRisks(I18n.t("risk.redaction"), PdfRisk.tagsLost(tagged, null));
         return regions.size();
@@ -126,6 +127,22 @@ public class CommandExecuter {
         if (xml.isEmpty())
             return false;
         Files.write(xmlFile, xml.get());
+        return true;
+    }
+
+    /**
+     * Writes the XMP metadata of the effective document to a file.
+     *
+     * @return False if the document has no XMP metadata.
+     */
+    public boolean extractXmp(Path xmpFile) throws Exception {
+        PDDocument document = documentProxy == null ? null : documentProxy.getDocument();
+        if (document == null)
+            return false;
+        var xmp = DocumentInformation.extractXmp(document);
+        if (xmp.isEmpty())
+            return false;
+        Files.write(xmpFile, xmp.get());
         return true;
     }
 

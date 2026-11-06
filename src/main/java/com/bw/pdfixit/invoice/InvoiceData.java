@@ -51,9 +51,14 @@ import static com.bw.pdfixit.invoice.InvoiceTotals.decimal;
 public final class InvoiceData {
 
     /**
-     * Guideline ids (BT-24) of the profiles the editor offers.
+     * Guideline ids (BT-24) of the profiles the editor offers. Not every profile is valid as e-invoice in every country
+     * (e.g. MINIMUM and BASIC WL usually are not), the user has to know which are legal.
      */
+    public static final String PROFILE_MINIMUM = "urn:factur-x.eu:1p0:minimum";
+    public static final String PROFILE_BASIC_WL = "urn:factur-x.eu:1p0:basicwl";
+    public static final String PROFILE_BASIC = "urn:cen.eu:en16931:2017#compliant#urn:factur-x.eu:1p0:basic";
     public static final String PROFILE_EN16931 = "urn:cen.eu:en16931:2017";
+    public static final String PROFILE_EXTENDED = "urn:cen.eu:en16931:2017#conformant#urn:factur-x.eu:1p0:extended";
     public static final String PROFILE_XRECHNUNG = "urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0";
     /**
      * Business process (BT-23) that XRechnung expects.
@@ -234,6 +239,17 @@ public final class InvoiceData {
      * @param due   Amount due: total minus prepaid amount plus rounding.
      */
     public record Totals(BigDecimal net, BigDecimal vat, BigDecimal gross, BigDecimal due) {
+    }
+
+    /**
+     * An entry of the VAT breakdown of the XML.
+     *
+     * @param category The VAT category code (S, Z, E, AE, K, G, O, ...).
+     * @param rate     The rate in percent, null if the category has none.
+     * @param basis    The net amount the VAT is calculated from.
+     * @param tax      The VAT.
+     */
+    public record VatBreakdown(String category, BigDecimal rate, BigDecimal basis, BigDecimal tax) {
     }
 
     /**
@@ -577,6 +593,23 @@ public final class InvoiceData {
      */
     public Totals totals() {
         return applyToDocument();
+    }
+
+    /**
+     * Writes the fields into the XML, calculates the sums and gives the VAT breakdown as it is in the XML.
+     */
+    public List<VatBreakdown> vatBreakdown() {
+        applyToDocument();
+        return InvoiceTotals.breakdown(document.getDocumentElement());
+    }
+
+    /**
+     * Writes the fields into the XML, calculates the sums and gives the net totals of the items as they are in the XML
+     * (allowances and charges of the items included), in the order of {@link #lines}.
+     */
+    public List<BigDecimal> lineTotals() {
+        applyToDocument();
+        return InvoiceTotals.lineTotals(document.getDocumentElement());
     }
 
     /**

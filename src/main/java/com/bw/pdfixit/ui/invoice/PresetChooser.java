@@ -118,6 +118,22 @@ class PresetChooser extends JPanel {
     }
 
     /**
+     * Fills all choosers again, e.g. after the presets were changed outside of a chooser.
+     */
+    static void reloadAll() {
+        for (PresetChooser c : List.copyOf(INSTANCES))
+            c.reload(c.keepSelection());
+    }
+
+    /**
+     * Selects the preset that fits the party, e.g. after the invoice was replaced by another one. The party is not
+     * changed.
+     */
+    void selectMatching() {
+        reload(keepSelection());
+    }
+
+    /**
      * The selected preset if the party still belongs to it, else the one that fits the party best.
      * The selection comes from before the presets were changed, so the entry may have been renamed.
      */

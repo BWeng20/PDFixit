@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+    <!-- Symbol of a round page tool button (RoundSvgButton). The color is the foreground color of the button. -->
+    <path fill="none" stroke="currentColor" stroke-width="1.8"
+          stroke-linecap="round" stroke-linejoin="round"
+          d="M17.75,7.18 A7.5,7.5 0 1 1 8.83,5.20 M8.83,5.20 L8.01,8.50 M8.83,5.20 L5.43,5.20"/>
+    <path fill="none" stroke="currentColor" stroke-width="1.4"
+          stroke-linecap="round" stroke-linejoin="round"
+          d="M10.8,8.85 H14.8 V13.65 M9.2,10.85 H12.8 V15.65 H9.2 Z"/>
+</svg>

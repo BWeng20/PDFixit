@@ -43,8 +43,6 @@ class I18nTest {
             Properties p = load("messages_" + code + ".properties");
             Map<String, String> missing = new HashMap<>();
             for (String key : base.stringPropertyNames()) {
-                if (key.equals("lang.available"))
-                    continue;
                 String t = p.getProperty(key);
                 if (t == null || t.isBlank())
                     missing.put(key, "missing");

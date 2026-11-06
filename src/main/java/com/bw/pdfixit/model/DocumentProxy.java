@@ -131,6 +131,24 @@ public class DocumentProxy {
     }
 
     /**
+     * Guards the PDFBox document, which is not thread safe: rendering, saving (e.g. for veraPDF) and
+     * changes of the document must not run at the same time. Otherwise a save can write the document while it is
+     * changed and write broken bytes, e.g. a veraPDF check reports errors that are no errors.<br>
+     * Held for every change of the document and when it is replaced or closed, so nobody saves or renders a
+     * closed document.<br>
+     * Lock order: the monitor of this object first, then this lock. Never call listeners or take the monitor of
+     * this object while holding it.
+     */
+    private final Object documentLock = new Object();
+
+    /**
+     * @return The lock to hold while the document is read or changed outside of this class, see {@link #documentLock}.
+     */
+    public Object getDocumentLock() {
+        return documentLock;
+    }
+
+    /**
      * Starts the next background loader task.
      * Document for document and if all documents are loaded, renders all pages.<br>
      * This is done parallel to the UI that shows the known pages.
@@ -259,7 +277,33 @@ public class DocumentProxy {
         }
     }
 
+    /**
+     * Incremented with each announced change that may change the conformance to a standard (e.g. PDF/A), see
+     * {@link #fireDocumentLoaded()}. Rotating, moving and deleting pages don't count: the UI needs no new
+     * veraPDF check for them.
+     */
+    private final java.util.concurrent.atomic.AtomicInteger contentGeneration = new java.util.concurrent.atomic.AtomicInteger();
+
+    /**
+     * @return The number of announced changes that may change the conformance, see {@link #contentGeneration}.
+     */
+    public int getContentGeneration() {
+        return contentGeneration.get();
+    }
+
+    /**
+     * Tells the listeners that the document was loaded or changed.
+     */
     public void fireDocumentLoaded() {
+        contentGeneration.incrementAndGet();
+        fireDocumentChanged();
+    }
+
+    /**
+     * Tells the listeners that the document changed, without counting it as a change of the content,
+     * see {@link #contentGeneration}.
+     */
+    private void fireDocumentChanged() {
         if (closed)
             return;
         List<DocumentConsumer> l;
@@ -291,13 +335,15 @@ public class DocumentProxy {
         closed = true;
         docConsumerList.clear();
         pageConsumerList.clear();
-        if (document != null) {
-            try {
-                document.close();
-            } catch (Exception e) {
-                Log.error("Error closing document: %s", e.getMessage());
+        synchronized (documentLock) {
+            if (document != null) {
+                try {
+                    document.close();
+                } catch (Exception e) {
+                    Log.error("Error closing document: %s", e.getMessage());
+                }
+                document = null;
             }
-            document = null;
         }
         loadWorker.clear();
         if (currentLoader != null) {
@@ -326,21 +372,23 @@ public class DocumentProxy {
         final int targetPrevPageIndex = (offset < 0) ? (pageIndex + offset - 1) : (pageIndex + offset);
 
         if (targetPrevPageIndex != pageIndex) {
-            if (targetPrevPageIndex >= 0) {
-                if (targetPrevPageIndex < pageCount) {
+            synchronized (documentLock) {
+                if (targetPrevPageIndex >= 0) {
+                    if (targetPrevPageIndex < pageCount) {
+                        PDPage pdPage = tree.get(pageIndex);
+                        PDPage prevPage = tree.get(targetPrevPageIndex);
+                        tree.remove(pageIndex);
+                        tree.insertAfter(pdPage, prevPage);
+                    } else
+                        return;
+                } else if (pageIndex > 0) {
                     PDPage pdPage = tree.get(pageIndex);
-                    PDPage prevPage = tree.get(targetPrevPageIndex);
+                    PDPage nextPage = tree.get(0);
                     tree.remove(pageIndex);
-                    tree.insertAfter(pdPage, prevPage);
+                    tree.insertBefore(pdPage, nextPage);
                 } else
                     return;
-            } else if (pageIndex > 0) {
-                PDPage pdPage = tree.get(pageIndex);
-                PDPage nextPage = tree.get(0);
-                tree.remove(pageIndex);
-                tree.insertBefore(pdPage, nextPage);
-            } else
-                return;
+            }
 
             synchronized (this) {
                 pages.clear();
@@ -350,7 +398,7 @@ public class DocumentProxy {
                 }
             }
             modified = true;
-            refirePages();
+            refirePages(false);
         }
     }
 
@@ -380,10 +428,12 @@ public class DocumentProxy {
             Page p = pages.get(pageIndex);
             p.image = null;
             p.scale = 0;
-            PDPage pd = document.getPage(pageIndex);
-            pd.setRotation(pd.getRotation() + degree);
+            synchronized (documentLock) {
+                PDPage pd = document.getPage(pageIndex);
+                pd.setRotation(pd.getRotation() + degree);
+            }
             modified = true;
-            refirePages();
+            refirePages(false);
         }
     }
 
@@ -394,11 +444,13 @@ public class DocumentProxy {
             Page p = pages.get(pageIndex);
             p.image = null;
             p.scale = 0;
-            PDPage pd = document.getPage(pageIndex);
-            pd.setRotation(pd.getRotation() + degree);
+            synchronized (documentLock) {
+                PDPage pd = document.getPage(pageIndex);
+                pd.setRotation(pd.getRotation() + degree);
+            }
         }
         modified = true;
-        refirePages();
+        refirePages(false);
     }
 
     private void renderPageToImage(PDFRenderer pdfRenderer, final int pageIndex) throws IOException {
@@ -438,7 +490,9 @@ public class DocumentProxy {
 
             try {
                 final boolean tagged = PdfRisk.isTagged(document);
-                renderPageToImage(pdfRenderer, pageIndex);
+                synchronized (documentLock) {
+                    renderPageToImage(pdfRenderer, pageIndex);
+                }
                 modified = true;
                 // The page is an image now, its tags are gone.
                 reportRisks(I18n.t("risk.toImage"), PdfRisk.tagsLost(tagged, null));
@@ -455,7 +509,9 @@ public class DocumentProxy {
             final boolean tagged = PdfRisk.isTagged(document);
             PDFRenderer pdfRenderer = new PDFRenderer(document);
             for (int pageIndex = 0; pageIndex < document.getNumberOfPages(); ++pageIndex) {
-                renderPageToImage(pdfRenderer, pageIndex);
+                synchronized (documentLock) {
+                    renderPageToImage(pdfRenderer, pageIndex);
+                }
             }
             modified = true;
             reportRisks(I18n.t("risk.toImage"), PdfRisk.tagsLost(tagged, null));
@@ -474,8 +530,11 @@ public class DocumentProxy {
     public void redact(List<Redactor.Region> regions) throws IOException {
         ensuredDocument();
         Preferences prefs = Preferences.getInstance();
-        final boolean tagged = PdfRisk.isTagged(document);
-        Redactor.redact(document, regions, prefs.getDpi(), prefs.getRedactionColor());
+        final boolean tagged;
+        synchronized (documentLock) {
+            tagged = PdfRisk.isTagged(document);
+            Redactor.redact(document, regions, prefs.getDpi(), prefs.getRedactionColor(), prefs.isRedactionAntialiasing());
+        }
         if (!regions.isEmpty())
             modified = true;
         // The redacted pages are images now, their tags are gone.
@@ -513,14 +572,13 @@ public class DocumentProxy {
         if (!changes.isEmpty() && pdfaFixListener != null)
             pdfaFixListener.accept(changes);
         PDDocument newDocument = Loader.loadPDF(EInvoice.attachXmlStrict(getBytes(), xml));
-        PDDocument oldDocument;
         synchronized (this) {
-            // The library replaces the producer etc., keep the ones of the document.
-            DocumentInformation.copy(document, newDocument);
-            oldDocument = document;
-            document = newDocument;
+            synchronized (documentLock) {
+                // The library replaces the producer etc., keep the ones of the document.
+                DocumentInformation.copy(document, newDocument);
+            }
+            replaceDocument(newDocument);
         }
-        IOUtils.closeQuietly(oldDocument);
         modified = true;
         fireDocumentLoaded();
     }
@@ -554,17 +612,23 @@ public class DocumentProxy {
         ensuredDocument();
         PdfStandard.Repair repair = PdfStandard.repairPdfa(getBytes(), upgradeToPdfa3);
         if (repair.pdf() != null) {
-            PDDocument fixed = Loader.loadPDF(repair.pdf());
-            PDDocument old;
-            synchronized (this) {
-                old = document;
-                document = fixed;
-            }
-            IOUtils.closeQuietly(old);
+            replaceDocument(Loader.loadPDF(repair.pdf()));
             modified = true;
             redrawAllPages();
         }
         return repair.changes();
+    }
+
+    /**
+     * Replaces the effective document and closes the old one. A save or rendering of the old document finishes
+     * first, see {@link #documentLock}.
+     */
+    private synchronized void replaceDocument(PDDocument newDocument) {
+        synchronized (documentLock) {
+            PDDocument old = document;
+            document = newDocument;
+            IOUtils.closeQuietly(old);
+        }
     }
 
     /**
@@ -618,7 +682,10 @@ public class DocumentProxy {
         try (PDDocument copy = Loader.loadPDF(getBytes())) {
             PdfStandard.convertTo(copy, target, version);
         }
-        Map<String, Integer> changes = PdfStandard.convertTo(document, target, version);
+        Map<String, Integer> changes;
+        synchronized (documentLock) {
+            changes = PdfStandard.convertTo(document, target, version);
+        }
         if (!changes.isEmpty()) {
             modified = true;
             redrawAllPages();
@@ -653,7 +720,9 @@ public class DocumentProxy {
      */
     private void redrawAllPages() {
         ++redrawGeneration;
-        document.setResourceCache(org.apache.pdfbox.pdmodel.ResourceCacheFactory.createResourceCache());
+        synchronized (documentLock) {
+            document.setResourceCache(org.apache.pdfbox.pdmodel.ResourceCacheFactory.createResourceCache());
+        }
         synchronized (this) {
             for (Page p : pages) {
                 p.image = null;
@@ -686,7 +755,10 @@ public class DocumentProxy {
      */
     public PdfFontMerger.Result mergeDuplicateFonts() throws IOException {
         ensuredDocument();
-        PdfFontMerger.Result result = PdfFontMerger.merge(document);
+        PdfFontMerger.Result result;
+        synchronized (documentLock) {
+            result = PdfFontMerger.merge(document);
+        }
         if (result.groups() > 0)
             modified = true;
         return result;
@@ -700,7 +772,9 @@ public class DocumentProxy {
      */
     public void replaceFont(org.apache.pdfbox.cos.COSDictionary font, FontSource source) throws IOException {
         ensuredDocument();
-        PdfFontEmbedder.replace(document, font, source);
+        synchronized (documentLock) {
+            PdfFontEmbedder.replace(document, font, source);
+        }
         modified = true;
         redrawAllPages();
     }
@@ -712,7 +786,10 @@ public class DocumentProxy {
      */
     public boolean removeInvoice() throws IOException {
         ensuredDocument();
-        boolean removed = EInvoice.removeXml(document);
+        boolean removed;
+        synchronized (documentLock) {
+            removed = EInvoice.removeXml(document);
+        }
         if (removed)
             modified = true;
         if (removed)
@@ -730,7 +807,9 @@ public class DocumentProxy {
             int pageIndex = pageNb - 1;
 
             // 0-based index!
-            document.removePage(pageIndex);
+            synchronized (documentLock) {
+                document.removePage(pageIndex);
+            }
             modified = true;
             pages.remove(pageIndex);
             int pageCount = pages.size();
@@ -739,12 +818,24 @@ public class DocumentProxy {
                 p.pageNb = i + 1;
                 p.pageCount = pageCount;
             }
-            refirePages();
+            refirePages(false);
         }
     }
 
     private void refirePages() {
-        fireDocumentLoaded();
+        refirePages(true);
+    }
+
+    /**
+     * Tells the listeners about the change and renders the pages without image.
+     *
+     * @param contentChanged False if only pages were rotated, moved or deleted, see {@link #contentGeneration}.
+     */
+    private void refirePages(boolean contentChanged) {
+        if (contentChanged)
+            fireDocumentLoaded();
+        else
+            fireDocumentChanged();
         boolean imageMissing = false;
         List<Page> pagesToFire;
         synchronized (this) {
@@ -820,9 +911,12 @@ public class DocumentProxy {
                                 Log.error("Both documents contain an invoice. Only the invoice of the first document is kept.");
                                 EInvoice.removeXml(document);
                             }
-                            final boolean tagged = PdfRisk.isTagged(this.getDocument()) || PdfRisk.isTagged(document);
-                            PDFMergerUtility pdfMergerUtility = new PDFMergerUtility();
-                            pdfMergerUtility.appendDocument(this.getDocument(), document);
+                            final boolean tagged;
+                            synchronized (documentLock) {
+                                tagged = PdfRisk.isTagged(this.getDocument()) || PdfRisk.isTagged(document);
+                                PDFMergerUtility pdfMergerUtility = new PDFMergerUtility();
+                                pdfMergerUtility.appendDocument(this.getDocument(), document);
+                            }
                             modified = true;
                             reportRisks(I18n.t("risk.merge"), PdfRisk.tagsLost(tagged, this.getDocument()));
                         } catch (Exception e) {
@@ -837,7 +931,9 @@ public class DocumentProxy {
                     }
                     // zipper merge if requested (start is 1-based "insert before page", so the last page is allowed)
                     if (oldPageCount > 0 && mo.startPageNb > 0 && mo.startPageNb <= oldPageCount) {
-                        zipperMerge(oldPageCount, pageCount, mo);
+                        synchronized (documentLock) {
+                            zipperMerge(oldPageCount, pageCount, mo);
+                        }
                         this.pages.clear();
                     }
 
@@ -935,13 +1031,15 @@ public class DocumentProxy {
      * @throws IOException If some write operation failed.
      */
     public byte[] getBytes() throws IOException {
-        if (document != null) {
-            document.setAllSecurityToBeRemoved(true);
+        // The document is read inside the lock: it may be replaced (and the old one closed) meanwhile.
+        synchronized (documentLock) {
+            if (document == null)
+                return null;
             ByteArrayOutputStream os = new ByteArrayOutputStream(5 * 1024 * 1024);
+            document.setAllSecurityToBeRemoved(true);
             document.save(os, CompressParameters.NO_COMPRESSION);
             return os.toByteArray();
-        } else
-            return null;
+        }
     }
 
 }

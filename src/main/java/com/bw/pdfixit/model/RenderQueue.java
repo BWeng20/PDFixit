@@ -102,7 +102,10 @@ public class RenderQueue {
                                         Log.debug("Render page #%d", i);
                                         try {
                                             final int generation = proxy.getRedrawGeneration();
-                                            page.image = renderer.renderImageWithDPI(i, dpi);
+                                            // Not while the document is saved or changed, see DocumentProxy.getDocumentLock.
+                                            synchronized (proxy.getDocumentLock()) {
+                                                page.image = renderer.renderImageWithDPI(i, dpi);
+                                            }
                                             if (generation != proxy.getRedrawGeneration()) {
                                                 // The content changed while rendering (e.g. a font was replaced): draw again.
                                                 page.image = null;

@@ -60,27 +60,30 @@ class PartyPanel extends FormPanel {
         InvoiceData.Field details = seller ? null : InvoiceData.Field.BUYER_DETAILS;
         InvoiceData.Field email = seller ? InvoiceData.Field.SELLER_EMAIL : InvoiceData.Field.BUYER_DETAILS;
 
-        nameField = field(null, 14, null, p -> p.name, (p, v) -> p.name = v);
+        // Business terms of the specification for the help: seller / buyer. The e-mail address is written as
+        // electronic address and as e-mail of the contact.
+        nameField = field(null, 14, null, p -> p.name, (p, v) -> p.name = v, seller ? "BT-27" : "BT-44");
         row(I18n.t("party.name"), nameField);
-        row(I18n.t("party.street"), field(address, 14, null, p -> p.street, (p, v) -> p.street = v));
-        row(I18n.t("party.postcode"), field(address, 6, null, p -> p.zip, (p, v) -> p.zip = v),
-                I18n.t("party.city"), field(address, 10, null, p -> p.city, (p, v) -> p.city = v));
-        row(I18n.t("party.country"), field(details, 3, I18n.t("party.country.tip"), p -> p.country, (p, v) -> p.country = v),
-                I18n.t("party.vatId"), field(details, 10, null, p -> p.vatId, (p, v) -> p.vatId = v));
+        row(I18n.t("party.street"), field(address, 14, null, p -> p.street, (p, v) -> p.street = v, seller ? "BT-35" : "BT-50"));
+        row(I18n.t("party.postcode"), field(address, 6, null, p -> p.zip, (p, v) -> p.zip = v, seller ? "BT-38" : "BT-53"),
+                I18n.t("party.city"), field(address, 10, null, p -> p.city, (p, v) -> p.city = v, seller ? "BT-37" : "BT-52"));
+        row(I18n.t("party.country"), field(details, 3, I18n.t("party.country.tip"), p -> p.country, (p, v) -> p.country = v,
+                        seller ? "BT-40" : "BT-55"),
+                I18n.t("party.vatId"), field(details, 10, null, p -> p.vatId, (p, v) -> p.vatId = v, seller ? "BT-31" : "BT-48"));
         if (seller) {
             row(I18n.t("party.taxNumber"), field(null, 10, I18n.t("party.taxNumber.tip"),
-                            p -> p.taxId, (p, v) -> p.taxId = v),
-                    I18n.t("party.email"), field(email, 10, null, p -> p.email, (p, v) -> p.email = v));
-            row(I18n.t("party.contact"), field(InvoiceData.Field.SELLER_CONTACT, 10, null, p -> p.contactName, (p, v) -> p.contactName = v),
-                    I18n.t("party.phone"), field(InvoiceData.Field.SELLER_CONTACT, 10, null, p -> p.phone, (p, v) -> p.phone = v));
+                            p -> p.taxId, (p, v) -> p.taxId = v, "BT-32"),
+                    I18n.t("party.email"), field(email, 10, null, p -> p.email, (p, v) -> p.email = v, "BT-34", "BT-43"));
+            row(I18n.t("party.contact"), field(InvoiceData.Field.SELLER_CONTACT, 10, null, p -> p.contactName, (p, v) -> p.contactName = v, "BT-41"),
+                    I18n.t("party.phone"), field(InvoiceData.Field.SELLER_CONTACT, 10, null, p -> p.phone, (p, v) -> p.phone = v, "BT-42"));
             section(I18n.t("party.bankAccount"));
             row("IBAN", field(InvoiceData.Field.BANK_ACCOUNT, 14, null,
-                            p -> p.iban == null ? null : InvoiceDialog.formatIban(p.iban), (p, v) -> p.iban = v),
-                    I18n.t("party.bic"), field(InvoiceData.Field.ACCOUNT_DETAILS, 8, null, p -> p.bic, (p, v) -> p.bic = v));
+                            p -> p.iban == null ? null : InvoiceDialog.formatIban(p.iban), (p, v) -> p.iban = v, "BT-84"),
+                    I18n.t("party.bic"), field(InvoiceData.Field.ACCOUNT_DETAILS, 8, null, p -> p.bic, (p, v) -> p.bic = v, "BT-86"));
             row(I18n.t("party.accountHolder"), field(InvoiceData.Field.ACCOUNT_DETAILS, 14, null,
-                    p -> p.accountHolder, (p, v) -> p.accountHolder = v));
+                    p -> p.accountHolder, (p, v) -> p.accountHolder = v, "BT-85"));
         } else {
-            row(I18n.t("party.email"), field(email, 14, null, p -> p.email, (p, v) -> p.email = v));
+            row(I18n.t("party.email"), field(email, 14, null, p -> p.email, (p, v) -> p.email = v, "BT-49", "BT-58"));
         }
         if (withLabel) {
             section(I18n.t("party.paymentAsBuyer"));
@@ -142,6 +145,13 @@ class PartyPanel extends FormPanel {
         bindings.forEach(this::mark);
     }
 
+    /**
+     * The values shown now are the ones to compare with: nothing is marked until the user changes something again.
+     */
+    void captureBaseline() {
+        setBaseline(party == null ? null : party.copy());
+    }
+
     private void mark(Binding b) {
         boolean modified = party != null && baseline != null
                 && !Outline.same(b.getter.apply(party), b.getter.apply(baseline));
@@ -174,10 +184,13 @@ class PartyPanel extends FormPanel {
         }
     }
 
+    /**
+     * @param ids Business terms of the value, their help is added to the tool tip.
+     */
     private JTextField field(InvoiceData.Field group, int columns, String toolTip, Function<Party, String> getter,
-                             BiConsumer<Party, String> setter) {
+                             BiConsumer<Party, String> setter, String... ids) {
         JTextField f = new JTextField(columns);
-        Binding b = new Binding(f, group, toolTip, getter, setter);
+        Binding b = new Binding(f, group, TermHelp.combine(toolTip, ids), getter, setter);
         bindings.add(b);
         f.getDocument().addDocumentListener(new DocumentListener() {
             @Override

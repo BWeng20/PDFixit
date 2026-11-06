@@ -1,33 +1,14 @@
 package com.bw.pdfixit.ui.invoice;
 
 import com.bw.pdfixit.I18n;
-import com.bw.pdfixit.ui.CollapsibleTextPanel;
-import com.bw.pdfixit.ui.UI;
-
 import com.bw.pdfixit.invoice.EInvoice;
 import com.bw.pdfixit.invoice.InvoiceData;
-import javax.swing.BorderFactory;
-import javax.swing.JButton;
-import javax.swing.JComponent;
-import javax.swing.JDialog;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JSeparator;
-import javax.swing.KeyStroke;
-import javax.swing.SwingConstants;
-import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Component;
-import java.awt.Dimension;
-import java.awt.Dialog;
-import java.awt.FlowLayout;
-import java.awt.Font;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Insets;
-import java.awt.Window;
+import com.bw.pdfixit.ui.CollapsibleTextPanel;
+import com.bw.pdfixit.ui.HtmlLabel;
+import com.bw.pdfixit.ui.UI;
+
+import javax.swing.*;
+import java.awt.*;
 import java.awt.event.KeyEvent;
 import java.math.BigDecimal;
 import java.text.NumberFormat;
@@ -119,10 +100,11 @@ public class InvoiceDialog extends JDialog {
     }
 
     private JComponent createError(String error) {
-        JLabel label = new JLabel(I18n.t("invoice.cannotRead", escape(error)));
-        label.setIcon(UIManager.getIcon("OptionPane.warningIcon"));
-        label.setIconTextGap(10);
-        return label;
+        // Selectable: the error may be copied.
+        JPanel panel = new JPanel(new BorderLayout(10, 0));
+        panel.add(new JLabel(UIManager.getIcon("OptionPane.warningIcon")), BorderLayout.WEST);
+        panel.add(new HtmlLabel(I18n.t("invoice.cannotRead", escape(error))), BorderLayout.CENTER);
+        return panel;
     }
 
     private JComponent createSummary(EInvoice.Summary s) {

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+    <!-- Symbol of a tab of the side tabs (SideTabs): a receipt. The color is the text color of the tab. -->
+    <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+          d="M6.5,3.5 H17.5 V20.5 L15.2,19 L12,20.5 L8.8,19 L6.5,20.5 Z M9.5,8 H14.5 M9.5,11.5 H14.5 M9.5,15 H12"/>
+</svg>

@@ -6,7 +6,7 @@ import com.bw.pdfixit.PdfRisk;
 import com.bw.pdfixit.model.DocumentProxy;
 import com.bw.pdfixit.model.MergeOptions;
 import com.bw.pdfixit.model.PdfLoadWorker;
-import org.apache.pdfbox.Loader;
+import com.bw.pdfixit.model.PdfLoader;
 import org.apache.pdfbox.io.IOUtils;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
@@ -47,9 +47,7 @@ public class UIPdfLoadWorker extends SwingWorker<PDDocument, Void> implements Pd
     protected PDDocument doInBackground() {
         try {
             byte[] data = Files.readAllBytes(file);
-            PDDocument document = ownerPassword != null
-                    ? Loader.loadPDF(data, ownerPassword)
-                    : Loader.loadPDF(data);
+            PDDocument document = PdfLoader.load(data, ownerPassword);
             documentProxy.error = null;
             // Before the security is removed, the original state is still visible.
             risks = PdfRisk.inspect(document, data);
@@ -63,9 +61,16 @@ public class UIPdfLoadWorker extends SwingWorker<PDDocument, Void> implements Pd
             documentProxy.error = I18n.t("load.notExist", file.getFileName());
             return null;
         } catch (Exception e) {
-            documentProxy.error = e.getMessage();
+            documentProxy.error = inFile(e.getMessage() == null ? e.toString() : e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * The message with the name of the file in the first line: several files may be loaded.
+     */
+    private String inFile(String message) {
+        return file.getFileName() + "\n" + message;
     }
 
     /**
@@ -85,8 +90,10 @@ public class UIPdfLoadWorker extends SwingWorker<PDDocument, Void> implements Pd
                 documentProxy.loadWorker.add(new UIPdfLoadWorker(documentProxy, file, pw, mo, consumer));
                 documentProxy.startNextLoader();
             } else {
-                documentProxy.error = I18n.t("load.protected");
+                documentProxy.error = inFile(I18n.t("load.protected"));
                 documentProxy.fireDocumentLoaded();
+                // Reported: the effective document is unchanged, the error must not block later updates.
+                documentProxy.error = null;
             }
         });
     }
@@ -102,12 +109,9 @@ public class UIPdfLoadWorker extends SwingWorker<PDDocument, Void> implements Pd
                 } else {
                     String refused = documentProxy.checkAppend(document);
                     if (refused != null) {
+                        // The check has told the user why, the effective document is unchanged.
                         Log.info("Not appended (%s): %s", file, refused);
                         IOUtils.closeQuietly(document);
-                        documentProxy.error = refused;
-                        documentProxy.fireDocumentLoaded();
-                        // The effective document is unchanged and fine: don't let the error block later updates.
-                        documentProxy.error = null;
                     } else {
                         if (document != null) {
                             documentProxy.reportRisks(file.getFileName().toString(), risks);
@@ -124,6 +128,9 @@ public class UIPdfLoadWorker extends SwingWorker<PDDocument, Void> implements Pd
             documentProxy.error = e.getMessage();
             documentProxy.fireDocumentLoaded();
         }
+        // An error is reported now (or later by the password request). It must not block the later updates of the
+        // document, which are only told while no error is set.
+        documentProxy.error = null;
         documentProxy.startNextLoader();
     }
 

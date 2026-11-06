@@ -130,10 +130,11 @@ class PdfStandardConvertTest {
 
     @Test
     void test_sameLevelIsNotChanged() throws Exception {
+        // A document without PDF/A gets PDF/A-3b when the invoice is attached.
         try (PDDocument doc = Loader.loadPDF(EInvoiceTest.invoicePdf(1))) {
-            Assertions.assertEquals(PdfStandardProfile.PDFA_3U, PdfStandard.profile(doc));
-            Assertions.assertTrue(PdfStandard.convertTo(doc, PdfStandardProfile.PDFA_3U).isEmpty());
-            Assertions.assertTrue(PdfStandard.describe(doc).contains("PDF/A-3u"));
+            Assertions.assertEquals(PdfStandardProfile.PDFA_3B, PdfStandard.profile(doc));
+            Assertions.assertTrue(PdfStandard.convertTo(doc, PdfStandardProfile.PDFA_3B).isEmpty());
+            Assertions.assertTrue(PdfStandard.describe(doc).contains("PDF/A-3b"));
         }
     }
 
