@@ -26,7 +26,7 @@ ifdef::backend-pdf[<<<]
 
 == Funktionen
 
-image:doc/Screenshot Release3.0_de.png[Screenshot]
+image:doc/Screenshot Release3.1_de.png[Screenshot]
 
 === PDF laden
 PDF-Dokumente einfach zum Bearbeiten importieren. +
