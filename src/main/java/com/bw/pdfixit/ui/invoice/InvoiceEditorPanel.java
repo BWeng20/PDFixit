@@ -197,7 +197,7 @@ public final class InvoiceEditorPanel extends JPanel {
 
         // The bar with the buttons that put the invoice into the document or throw the changes away, and the line
         // about the invoice right above them: it tells if the invoice can be put into the document. It is not in the
-        // panel, the window puts it at the bottom of the tab, where it is not scrolled away (see saveBar()).
+        // panel, the window puts it below the tab and keeps it in sight while the tab scrolls (see saveBar()).
         JPanel saveRow = new JPanel(new FlowLayout(FlowLayout.TRAILING, 6, 0));
         saveRow.add(discardButton);
         saveRow.add(applyButton);
@@ -219,7 +219,8 @@ public final class InvoiceEditorPanel extends JPanel {
 
     /**
      * The bar with the buttons to apply or discard the changes of the editor and the line that tells if the invoice is
-     * complete. The window puts it at the bottom of the tab, so it stays in sight when the editor scrolls.
+     * complete. The window puts it below the tab, it sticks to the bottom of the view while the end of the tab is
+     * scrolled out of view.
      */
     public JComponent saveBar() {
         return saveBar;

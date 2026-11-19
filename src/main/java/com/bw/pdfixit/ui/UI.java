@@ -462,39 +462,63 @@ public class UI extends JPanel {
         documentTab.add(new BadgedBox(new SigningPanel(this), signingHelp), dgc);
         dgc.gridy = 3;
         documentTab.add(new SplitPanel(this), dgc);
-        drawer.addPanel(TAB_DOCUMENT, documentTab);
+        // The color of a tab is also the color of the lines beside its panel.
+        Color documentColor = new Color(0x4A7FC1);
+        Color invoiceColor = new Color(0x2E9C94);
+        Color permissionsColor = new Color(0xD9962B);
+        drawer.addPanel(TAB_DOCUMENT, documentTab, documentColor);
         // The e-invoice: create or edit it and check it.
-        drawer.addPanel(TAB_INVOICE, new InvoicePanel(this));
+        drawer.addPanel(TAB_INVOICE, new InvoicePanel(this), invoiceColor);
         // The editor uses the height of the window: the items table grows with it.
         drawer.setFillsHeight(TAB_INVOICE);
-        drawer.addPanel(TAB_PERMISSIONS, new BadgedBox(new PermissionsPanel(this), permissionHelp));
+        drawer.addPanel(TAB_PERMISSIONS, new BadgedBox(new PermissionsPanel(this), permissionHelp), permissionsColor);
 
         SideTabs tabs = new SideTabs(List.of(
-                new SideTabs.Spec(TAB_DOCUMENT, I18n.t("ui.tab.document"), "/svg/tab-document.svg", new Color(0x4A7FC1)),
-                new SideTabs.Spec(TAB_INVOICE, I18n.t("ui.tab.invoice"), "/svg/tab-invoice.svg", new Color(0x2E9C94)),
-                new SideTabs.Spec(TAB_PERMISSIONS, I18n.t("ui.tab.permissions"), "/svg/tab-permissions.svg", new Color(0xD9962B))));
+                new SideTabs.Spec(TAB_DOCUMENT, I18n.t("ui.tab.document"), "/svg/tab-document.svg", documentColor),
+                new SideTabs.Spec(TAB_INVOICE, I18n.t("ui.tab.invoice"), "/svg/tab-invoice.svg", invoiceColor),
+                new SideTabs.Spec(TAB_PERMISSIONS, I18n.t("ui.tab.permissions"), "/svg/tab-permissions.svg", permissionsColor)));
         drawer.setOpen(tabs.open());
         // In a small window or with a big font the controls scroll, they are not cut off.
         // The divider can't be moved over the controls: the scroll pane is not narrower than they need.
         JScrollPane controlsScroll = new ProtectedScrollPane(drawer);
         controlsScroll.setBorder(BorderFactory.createEmptyBorder());
         controlsScroll.getVerticalScrollBar().setUnitIncrement(fm.getHeight());
-        JPanel drawerFrame = new JPanel(new BorderLayout());
-        drawerFrame.add(controlsScroll, BorderLayout.CENTER);
+        // The scroll bar takes room beside the controls: the divider follows if it comes or goes, so it doesn't cover
+        // the right edge of the controls.
+        controlsScroll.getVerticalScrollBar().addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentShown(ComponentEvent e) {
+                scrollBarChanged();
+            }
+
+            @Override
+            public void componentHidden(ComponentEvent e) {
+                scrollBarChanged();
+            }
+
+            private void scrollBarChanged() {
+                SwingUtilities.invokeLater(() -> {
+                    if (splitPane != null) {
+                        updateDivider();
+                        updateMinimumWindowSize();
+                    }
+                });
+            }
+        });
 
         // Open, add and save are always in reach, also if all tabs are closed.
         JPanel actionBar = new ActionBar(this);
 
-        // Below the drawer: the bar of the open tab that must stay in sight (the invoice tab has the buttons to apply
-        // the invoice), it is not scrolled away with the controls.
-        JPanel barHolder = new JPanel(new BorderLayout());
-        JPanel drawerArea = new JPanel(new BorderLayout());
-        drawerArea.add(drawerFrame, BorderLayout.CENTER);
-        drawerArea.add(barHolder, BorderLayout.SOUTH);
+        // The buttons that apply the invoice are below the invoice panel, inside its lines. They stick to the bottom of
+        // the view while the end of the panel is scrolled out of view, so they stay in reach. The view is repainted
+        // as a whole when it scrolls: a copied area would show the bar at its old place.
+        drawer.setBar(TAB_INVOICE, invoiceEditor.saveBar());
+        controlsScroll.getViewport().setScrollMode(JViewport.SIMPLE_SCROLL_MODE);
+        controlsScroll.getViewport().addChangeListener(e -> drawer.placeBar());
 
         JPanel left = new JPanel(new BorderLayout());
         left.add(tabs, BorderLayout.WEST);
-        left.add(drawerArea, BorderLayout.CENTER);
+        left.add(controlsScroll, BorderLayout.CENTER);
         left.add(actionBar, BorderLayout.SOUTH);
 
         // The margin of the window. On the split pane itself: its divider location counts from its outer edge.
@@ -540,15 +564,9 @@ public class UI extends JPanel {
         invoiceEditor.setShown(tabs.open().contains(TAB_INVOICE));
 
         Runnable showDrawer = () -> {
-            // The line on top has the color of the tab that was opened last.
-            drawerFrame.setBorder(BorderFactory.createMatteBorder(3, 0, 0, 0, tabs.activeColor()));
+            // Each open panel has the lines in the color of its tab, see TabDrawer.
             drawer.setOpen(tabs.open());
             invoiceEditor.setShown(tabs.open().contains(TAB_INVOICE));
-            barHolder.removeAll();
-            if (tabs.open().contains(TAB_INVOICE))
-                barHolder.add(invoiceEditor.saveBar(), BorderLayout.CENTER);
-            barHolder.revalidate();
-            barHolder.repaint();
             left.revalidate();
         };
         showDrawer.run();
@@ -558,6 +576,10 @@ public class UI extends JPanel {
             // back if they need less again.
             updateDivider();
             SwingUtilities.invokeLater(this::updateMinimumWindowSize);
+            // The panel of the tab the user selected is scrolled into view, after the drawer has its new layout.
+            String clicked = tabs.clickedTab();
+            if (clicked != null)
+                SwingUtilities.invokeLater(() -> drawer.scrollToPanel(clicked));
         });
 
         JScrollPane scrollPane = new JScrollPane(pages);

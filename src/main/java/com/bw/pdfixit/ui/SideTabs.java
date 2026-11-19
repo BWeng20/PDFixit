@@ -57,6 +57,10 @@ final class SideTabs extends JPanel {
      */
     private final LinkedHashSet<String> open = new LinkedHashSet<>();
     private final List<Runnable> listeners = new ArrayList<>();
+    /**
+     * The tab of the last click, if the click opened it or left it open. Null if the click closed it.
+     */
+    private String clicked;
 
     SideTabs(List<Spec> specs) {
         super(new GridBagLayout());
@@ -115,13 +119,10 @@ final class SideTabs extends JPanel {
     }
 
     /**
-     * @return The color of the tab that was opened last.
+     * @return The identifier of the tab the user clicked last, if it is open, null if the click closed it.
      */
-    Color activeColor() {
-        String last = null;
-        for (String id : open)
-            last = id;
-        return tabs.get(last).spec.color();
+    String clickedTab() {
+        return clicked;
     }
 
     /**
@@ -159,6 +160,7 @@ final class SideTabs extends JPanel {
             open.clear();
             open.add(id);
         }
+        clicked = open.contains(id) ? id : null;
         syncButtons();
         if (before.equals(open))
             return;
