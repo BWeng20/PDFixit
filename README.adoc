@@ -102,6 +102,23 @@ Text search only finds real text, not text inside images (e.g. scanned pages). M
 
 ifdef::backend-pdf[<<<]
 
+=== E-Invoices (ZUGFeRD / Factur-X)
+Reads, creates and edits e-invoices: a PDF that carries the invoice data as an attached XML file. For invoices that consist of an XML file only (XRechnung), please use an XML tool.
+
+ZUGFeRD is the format for hybrid e-invoices of the Forum elektronische Rechnung Deutschland (FeRD), identical to the French Factur-X. The specification, examples and further information are available at https://www.ferd-net.de[www.ferd-net.de].
+
+* The *Invoice* tab on the left holds everything for the invoice. A label on the tab shows what the editor does: *new* if the document has no invoice yet, *edit* if the editor shows the invoice of the document. The tab has two boxes. *Invoice in the document* shows if the document has an invoice; it is checked automatically (PDF/A-3 and the rules of EN 16931) when the document is loaded or changed, a check never changes the document, *Details…* shows the messages, and *Attached invoice* shows, saves or removes the invoice. *Invoice Editor* creates or edits the invoice.
+* The editor contains fields for number, dates, seller, buyer, payment and items. The totals are calculated while you type. Missing data is listed before the invoice is attached. Data of an existing invoice that has no field in the form is kept; the tab *All fields* shows and changes it, with the business term of EN 16931 (e.g. "BT-1 Invoice number"). Below the table a description of the selected value with hints based on the standard is shown: what to enter, if it is mandatory, its format, the allowed codes and the business rules. The fields of the editor show this help as tool tip.
+* *Invoice is complete* in the bar at the bottom of the tab (it stays in sight when the editor scrolls) tells if all data is there (or "complete, but 1 hint" if there are notes worth a look); what is missing, or worth a look, is listed above it, beside the sums. Changes in the editor are a draft until you apply them: the mark *modified* in the corner of the editor shows that it differs from the invoice in the document. *Apply to document* (or *Add to document*, *Replace invoice*) in that bar checks the invoice and puts it into the document; an existing invoice is replaced, not duplicated, and an invalid invoice is not applied. *Discard changes* throws the changes away. *Write to File* applies a pending draft, too. Only the invoice data changes, not the visible page of the document. The document is changed in memory, *Write to File* stores it.
+* Seller and buyer can be chosen from presets, managed with *Manage…* on the *Seller* and *Buyer* tabs of the editor. A buyer can have default payment terms and days until due.
+* *New Invoice* starts a new invoice. *XML file* imports an XML file into the editor or exports the editor as XML file, the document is not changed. *Document* shows the invoice of the document, saves the attached XML as it is or removes the invoice.
+* An e-invoice needs the PDF standard PDF/A-3. Attaching an invoice converts the document, if necessary, and keeps the conformance letter of the document: a PDF/A-3a stays a, PDF/A-3u stays u, everything else becomes PDF/A-3b. This applies to the Invoice tab and to `--attachInvoice`. To create the visible invoice, too, use the <<wizards,E-Invoice wizard>>. Not every document can be converted; then the invoice is not attached and the document stays unchanged. Details: <<pdf-standards,PDF Standards>>.
+* Merging keeps the invoice (if both documents have one, the one of the first document). Splitting keeps it in the first part only.
+* Redaction doesn't touch the invoice data, so confidential data may remain in it. The program asks what to do.
+* A document with an invoice must not be encrypted, otherwise it is no valid e-invoice any more.
+
+ifdef::backend-pdf[<<<]
+
 [[wizards]]
 === Wizards
 A wizard leads through a task from its goal. Wizards are started from the menu *Wizards*, or from the cards of the start page, which is shown while no document is open. The menu also holds *Edit Template Layout...* and the submenu *Recent templates* (the last five templates whose layout was edited or used).
@@ -125,23 +142,6 @@ A value that does not fit its region is an error and is never cut off: enlarge t
 *Layout editor:* *Wizards > Edit Template Layout...* (or *Edit layout...* in the template step) shows the pages of the template with the regions drawn on them. Regions are moved and resized with the mouse, the list of elements holds the fields of the body in their order, and a panel sets font size, alignment, labels and the following pages. *Sample data* fills the page with a made-up invoice, so you see the effect while you work; warnings tell if a region contains text of the template, leaves the page or is too small. *Reset to DIN 5008* starts again from form A or B. *Save* tells where the layout file was written.
 
 *PDF/A level:* A generated invoice is PDF/A-3. The level is *u* (default: text can be extracted), *b* (basic) or *a* (with a formal structure, see <<tagging,Level a>>). It is chosen in the review step and remembered, and `--pdfaLevel` sets it on the command line. The generated invoice has no logical structure of its own (no support for screen readers); the tags of the template are removed.
-
-ifdef::backend-pdf[<<<]
-
-=== E-Invoices (ZUGFeRD / Factur-X)
-Reads, creates and edits e-invoices: a PDF that carries the invoice data as an attached XML file. For invoices that consist of an XML file only (XRechnung), please use an XML tool.
-
-ZUGFeRD is the format for hybrid e-invoices of the Forum elektronische Rechnung Deutschland (FeRD), identical to the French Factur-X. The specification, examples and further information are available at https://www.ferd-net.de[www.ferd-net.de].
-
-* The *Invoice* tab on the left holds everything for the invoice. A label on the tab shows what the editor does: *new* if the document has no invoice yet, *edit* if the editor shows the invoice of the document. The tab has two boxes. *Invoice in the document* shows if the document has an invoice; it is checked automatically (PDF/A-3 and the rules of EN 16931) when the document is loaded or changed, a check never changes the document, *Details…* shows the messages, and *Attached invoice* shows, saves or removes the invoice. *Invoice Editor* creates or edits the invoice.
-* The editor contains fields for number, dates, seller, buyer, payment and items. The totals are calculated while you type. Missing data is listed before the invoice is attached. Data of an existing invoice that has no field in the form is kept; the tab *All fields* shows and changes it, with the business term of EN 16931 (e.g. "BT-1 Invoice number"). Below the table a description of the selected value with hints based on the standard is shown: what to enter, if it is mandatory, its format, the allowed codes and the business rules. The fields of the editor show this help as tool tip.
-* *Invoice is complete* in the bar at the bottom of the tab (it stays in sight when the editor scrolls) tells if all data is there (or "complete, but 1 hint" if there are notes worth a look); what is missing, or worth a look, is listed above it, beside the sums. Changes in the editor are a draft until you apply them: the mark *modified* in the corner of the editor shows that it differs from the invoice in the document. *Apply to document* (or *Add to document*, *Replace invoice*) in that bar checks the invoice and puts it into the document; an existing invoice is replaced, not duplicated, and an invalid invoice is not applied. *Discard changes* throws the changes away. *Write to File* applies a pending draft, too. Only the invoice data changes, not the visible page of the document. The document is changed in memory, *Write to File* stores it.
-* Seller and buyer can be chosen from presets, managed with *Manage…* on the *Seller* and *Buyer* tabs of the editor. A buyer can have default payment terms and days until due.
-* *New Invoice* starts a new invoice. *XML file* imports an XML file into the editor or exports the editor as XML file, the document is not changed. *Document* shows the invoice of the document, saves the attached XML as it is or removes the invoice.
-* An e-invoice needs the PDF standard PDF/A-3. Attaching an invoice converts the document, if necessary, and keeps the conformance letter of the document: a PDF/A-3a stays a, PDF/A-3u stays u, everything else becomes PDF/A-3b. This applies to the Invoice tab and to `--attachInvoice`. To create the visible invoice, too, use the <<wizards,E-Invoice wizard>>. Not every document can be converted; then the invoice is not attached and the document stays unchanged. Details: <<pdf-standards,PDF Standards>>.
-* Merging keeps the invoice (if both documents have one, the one of the first document). Splitting keeps it in the first part only.
-* Redaction doesn't touch the invoice data, so confidential data may remain in it. The program asks what to do.
-* A document with an invoice must not be encrypted, otherwise it is no valid e-invoice any more.
 
 [[profiles]]
 ==== Profiles and Versions

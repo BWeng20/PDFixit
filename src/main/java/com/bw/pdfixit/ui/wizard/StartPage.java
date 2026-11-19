@@ -7,14 +7,20 @@ import javax.swing.BorderFactory;
 import javax.swing.Icon;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingConstants;
 import javax.swing.UIManager;
+import javax.swing.border.Border;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
-import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.GridLayout;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 
@@ -23,6 +29,9 @@ import java.awt.event.MouseEvent;
  * layout editor, and a hint how to open a PDF.
  */
 public class StartPage extends JPanel {
+
+    private static final int CARD_GAP_H = 16;
+    private static final int CARD_GAP_V = 16;
 
     /**
      * A card of the page.
@@ -52,7 +61,8 @@ public class StartPage extends JPanel {
         center.add(head);
         center.add(javax.swing.Box.createVerticalStrut(12));
 
-        JPanel row = new JPanel(new FlowLayout(FlowLayout.CENTER, 16, 8));
+        // The cards wrap into as many columns as the width allows; what does not fit in height scrolls.
+        JPanel row = new JPanel(new GridLayout(1, cards.size(), CARD_GAP_H, CARD_GAP_V));
         row.setOpaque(false);
         for (Card card : cards)
             row.add(createCard(card));
@@ -63,18 +73,50 @@ public class StartPage extends JPanel {
         JPanel holder = new JPanel(new java.awt.GridBagLayout());
         holder.setOpaque(false);
         holder.add(center);
-        add(holder, BorderLayout.CENTER);
+        JScrollPane scroll = new JScrollPane(holder, ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+                ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.setOpaque(false);
+        scroll.getViewport().setOpaque(false);
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+        scroll.getHorizontalScrollBar().setUnitIncrement(16);
+        scroll.getViewport().addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                updateColumns(row, scroll.getViewport().getWidth());
+            }
+        });
+        add(scroll, BorderLayout.CENTER);
+    }
+
+    /**
+     * Sets the number of card columns so that the cards fit into the given width.
+     */
+    private static void updateColumns(JPanel row, int width) {
+        int count = row.getComponentCount();
+        if (count == 0)
+            return;
+        int cardWidth = 0;
+        for (Component c : row.getComponents())
+            cardWidth = Math.max(cardWidth, c.getPreferredSize().width);
+        int columns = Math.max(1, Math.min(count, (width + CARD_GAP_H) / (cardWidth + CARD_GAP_H)));
+        GridLayout layout = (GridLayout) row.getLayout();
+        if (layout.getColumns() != columns) {
+            layout.setColumns(columns);
+            layout.setRows((count + columns - 1) / columns);
+            row.revalidate();
+        }
     }
 
     private static JPanel createCard(Card card) {
-        final Color normal = UIManager.getColor("Panel.background");
-        final Color hover = UIManager.getColor("Button.hoverBackground") != null
-                ? UIManager.getColor("Button.hoverBackground") : normal;
-        JPanel panel = new JPanel(new BorderLayout(0, 6));
-        panel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(UIManager.getColor("Component.borderColor") != null
-                        ? UIManager.getColor("Component.borderColor") : Color.GRAY),
-                BorderFactory.createEmptyBorder(14, 14, 14, 14)));
+        JPanel panel = new JPanel(new BorderLayout(0, 6)) {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                // The border colour belongs to the look and feel, so it is set again after each switch.
+                setBorder(cardBorder());
+            }
+        };
         Icon icon = UI.getIcon(card.icon());
         JLabel symbol = new JLabel(icon, SwingConstants.CENTER);
         JLabel title = new JLabel(card.title(), SwingConstants.CENTER);
@@ -97,17 +139,26 @@ public class StartPage extends JPanel {
                 card.action().run();
             }
 
+            // The colours are looked up on each event, so they follow a switch of the look and feel.
             @Override
             public void mouseEntered(MouseEvent e) {
-                panel.setBackground(hover);
+                Color hover = UIManager.getColor("Button.hoverBackground");
+                panel.setBackground(hover != null ? hover : UIManager.getColor("Panel.background"));
             }
 
             @Override
             public void mouseExited(MouseEvent e) {
-                panel.setBackground(normal);
+                panel.setBackground(UIManager.getColor("Panel.background"));
             }
         });
         return panel;
+    }
+
+    private static Border cardBorder() {
+        Color line = UIManager.getColor("Component.borderColor");
+        return BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(line != null ? line : Color.GRAY),
+                BorderFactory.createEmptyBorder(14, 14, 14, 14));
     }
 
     private static String escape(String s) {

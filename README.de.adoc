@@ -102,32 +102,6 @@ Die Textsuche findet nur echten Text, keinen Text in Bildern (z. B. gescannte Se
 
 ifdef::backend-pdf[<<<]
 
-[[wizards]]
-=== Assistenten
-Ein Assistent führt von einem Ziel aus durch eine Aufgabe. Assistenten werden über das Menü *Assistenten* gestartet oder über die Karten der Startseite, die erscheint, solange kein Dokument offen ist. Das Menü enthält auch *Vorlagen-Layout bearbeiten...* und das Untermenü *Zuletzt verwendete Vorlagen* (die letzten fünf Vorlagen, deren Layout bearbeitet oder benutzt wurde).
-
-*E-Rechnungs-Assistent:* erstellt eine E-Rechnung auf Ihrem Briefbogen oder hängt eine an ein vorhandenes PDF an. Jeder Schritt zeigt, was fehlt; *Weiter* ist möglich, wenn nichts fehlt, und die Hilfe-Schaltfläche des Dialogs erklärt die Schritte.
-
-. *Ziel:* eine neue Rechnung auf einem Briefbogen, eine Rechnung zu einem vorhandenen PDF hinzufügen (dessen Seiten bleiben, wie sie sind) oder von einer Rechnungs-XML-Datei ausgehen. Dokumenttyp und Profil werden hier gewählt, siehe <<profiles,Profile und Versionen>>.
-. *Verkäufer*, *Käufer*, *Positionen* und *Zahlung:* die Rechnungsdaten, mit denselben Feldern und Vorlagen wie im Reiter Rechnung. Der Verkäufer wird für die nächste Rechnung gemerkt.
-. *Vorlage:* der Briefbogen (siehe unten), eine Liste der letzten fünf Vorlagen, eine Vorschau mit den Bereichen des Layouts, eine Prüfung der Vorlage und *Layout bearbeiten...*.
-. *Prüfung:* Die Rechnung wird erzeugt und geprüft (EN 16931 und PDF/A-3), während Sie die Seiten ansehen. Probleme stehen in einer Liste mit einem Link zum Schritt oder zum Layout-Editor, der sie behebt. Die *PDF/A-Stufe* und die *Sprache der Rechnung* werden hier gewählt und gemerkt. *Fertigstellen* öffnet die Rechnung als aktuelles Dokument; sie ist erst mit *In Datei schreiben* gespeichert.
-
-*Vorlagen und Layouts:* Die Vorlage ist ein einfaches Briefbogen-PDF aus einem beliebigen Programm (Word, LibreOffice, Druckerei, sogar ein Scan), ohne Platzhalter oder Markierungen. Das Programm verändert es nie: Die Rechnung wird auf die Seiten geschrieben. Wohin der Text kommt, steht in einer *Layout-Datei*, einer kleinen `.json`-Datei mit dem Namen der Vorlage neben dem PDF (`brief.pdf` hat `brief.json`). Ist der Ordner des PDFs nicht beschreibbar oder gehört eine `.json`-Datei dieses Namens zu etwas anderem, wird das Layout stattdessen im Ordner `.pdfixit/layouts` Ihres Benutzerordners gespeichert. Ohne Layout-Datei gelten die Positionen nach DIN 5008 (Form B). Das Layout enthält:
-
-* die Bereiche der Felder (Nummer, Daten, Verkäufer, Käufer, Rücksendeangabe, Seitenzahl, ...) und den *Textbereich*, in dem Positionen, Summen, Zahlungsbedingungen und Bankverbindung von Seite zu Seite fließen;
-* die *Beschriftungen*, die das Programm vor die Werte druckt (auf Deutsch oder Englisch, wie für die Rechnung gewählt). Jede Beschriftung lässt sich verschieben oder löschen, denn ein Briefbogen druckt sie vielleicht schon;
-* einen *Schlusstext* und ein *Unterschriftsbild*, die mit dem Textbereich wandern. Das Bild wird in der Layout-Datei gespeichert, jeder, der die Datei bekommt, kann es sehen;
-* die Quelle der *Folgeseiten*: Seite 2 der Vorlage (wird automatisch benutzt, wenn die Vorlage zwei Seiten hat), Seite 1 noch einmal, die erste Seite eines anderen PDFs oder eine leere Seite. Braucht eine lange Rechnung eine zweite Seite und die Vorlage hat nur eine, fragt der Assistent und merkt sich die Antwort im Layout.
-
-Ein Wert, der nicht in seinen Bereich passt, ist ein Fehler und wird nie abgeschnitten: Vergrößern Sie den Bereich im Layout-Editor.
-
-*Layout-Editor:* *Assistenten > Vorlagen-Layout bearbeiten...* (oder *Layout bearbeiten...* im Schritt Vorlage) zeigt die Seiten der Vorlage mit den eingezeichneten Bereichen. Bereiche werden mit der Maus verschoben und in der Größe geändert, die Liste der Elemente enthält die Felder des Textbereichs in ihrer Reihenfolge, und ein Feld stellt Schriftgröße, Ausrichtung, Beschriftungen und die Folgeseiten ein. *Beispieldaten* füllt die Seite mit einer erfundenen Rechnung, so sehen Sie die Wirkung beim Arbeiten; Warnungen sagen, wenn ein Bereich Text der Vorlage enthält, die Seite verlässt oder zu klein ist. *Auf DIN 5008 zurücksetzen* beginnt neu mit Form A oder B. *Speichern* sagt, wo die Layout-Datei geschrieben wurde.
-
-*PDF/A-Stufe:* Eine erzeugte Rechnung ist PDF/A-3. Die Stufe ist *u* (Vorgabe: Text lässt sich extrahieren), *b* (einfach) oder *a* (mit formaler Struktur, siehe <<tagging,Stufe a>>). Sie wird im Schritt Prüfung gewählt und gemerkt, und `--pdfaLevel` setzt sie auf der Kommandozeile. Die erzeugte Rechnung hat keine eigene logische Struktur (keine Unterstützung für Screenreader); die Tags der Vorlage werden entfernt.
-
-ifdef::backend-pdf[<<<]
-
 === E-Rechnungen (ZUGFeRD / Factur-X)
 Liest, erstellt und bearbeitet E-Rechnungen: ein PDF, das die Rechnungsdaten als angehängte XML-Datei enthält. Für Rechnungen, die nur aus einer XML-Datei bestehen (XRechnung), nehmen Sie bitte ein XML Tool.
 
@@ -166,6 +140,32 @@ Das Profil (BT-24) legt fest, welche Daten eine Rechnung enthält. Der Editor bi
 * Die Rechnung wird mit Mustang 2.26.0 (August 2026) geprüft. Es enthält die Schematron-Regeln von Factur-X 1.09.2 für alle fünf Factur-X-Profile und die Regeln von XRechnung 3.x. Eine neue Version der Spezifikation braucht in der Regel eine neue Version von Mustang, siehe <<dependencies,Anhang: Abhängigkeiten>>.
 * Rechnungen mit der Leitlinien-ID einer anderen Version (z. B. `urn:zugferd.de:2p0:basic`) werden gelesen. Das Profil wird mit seinem Namen angezeigt, wenn es bekannt ist, sonst als „Other: <ID>“.
 * Noch nicht unterstützt: XRechnung 4.0 (seit September 2026 gibt es eine Vorabversion, die endgültige Version wird für das Frühjahr 2027 erwartet, XRechnung 3.0 bleibt mindestens bis 31. Juli 2027 gültig) und die Bruttorechnung, die für die nächste ZUGFeRD-Version geplant ist.
+
+ifdef::backend-pdf[<<<]
+
+[[wizards]]
+=== Assistenten
+Ein Assistent führt von einem Ziel aus durch eine Aufgabe. Assistenten werden über das Menü *Assistenten* gestartet oder über die Karten der Startseite, die erscheint, solange kein Dokument offen ist. Das Menü enthält auch *Vorlagen-Layout bearbeiten...* und das Untermenü *Zuletzt verwendete Vorlagen* (die letzten fünf Vorlagen, deren Layout bearbeitet oder benutzt wurde).
+
+*E-Rechnungs-Assistent:* erstellt eine E-Rechnung auf Ihrem Briefbogen oder hängt eine an ein vorhandenes PDF an. Jeder Schritt zeigt, was fehlt; *Weiter* ist möglich, wenn nichts fehlt, und die Hilfe-Schaltfläche des Dialogs erklärt die Schritte.
+
+. *Ziel:* eine neue Rechnung auf einem Briefbogen, eine Rechnung zu einem vorhandenen PDF hinzufügen (dessen Seiten bleiben, wie sie sind) oder von einer Rechnungs-XML-Datei ausgehen. Dokumenttyp und Profil werden hier gewählt, siehe <<profiles,Profile und Versionen>>.
+. *Verkäufer*, *Käufer*, *Positionen* und *Zahlung:* die Rechnungsdaten, mit denselben Feldern und Vorlagen wie im Reiter Rechnung. Der Verkäufer wird für die nächste Rechnung gemerkt.
+. *Vorlage:* der Briefbogen (siehe unten), eine Liste der letzten fünf Vorlagen, eine Vorschau mit den Bereichen des Layouts, eine Prüfung der Vorlage und *Layout bearbeiten...*.
+. *Prüfung:* Die Rechnung wird erzeugt und geprüft (EN 16931 und PDF/A-3), während Sie die Seiten ansehen. Probleme stehen in einer Liste mit einem Link zum Schritt oder zum Layout-Editor, der sie behebt. Die *PDF/A-Stufe* und die *Sprache der Rechnung* werden hier gewählt und gemerkt. *Fertigstellen* öffnet die Rechnung als aktuelles Dokument; sie ist erst mit *In Datei schreiben* gespeichert.
+
+*Vorlagen und Layouts:* Die Vorlage ist ein einfaches Briefbogen-PDF aus einem beliebigen Programm (Word, LibreOffice, Druckerei, sogar ein Scan), ohne Platzhalter oder Markierungen. Das Programm verändert es nie: Die Rechnung wird auf die Seiten geschrieben. Wohin der Text kommt, steht in einer *Layout-Datei*, einer kleinen `.json`-Datei mit dem Namen der Vorlage neben dem PDF (`brief.pdf` hat `brief.json`). Ist der Ordner des PDFs nicht beschreibbar oder gehört eine `.json`-Datei dieses Namens zu etwas anderem, wird das Layout stattdessen im Ordner `.pdfixit/layouts` Ihres Benutzerordners gespeichert. Ohne Layout-Datei gelten die Positionen nach DIN 5008 (Form B). Das Layout enthält:
+
+* die Bereiche der Felder (Nummer, Daten, Verkäufer, Käufer, Rücksendeangabe, Seitenzahl, ...) und den *Textbereich*, in dem Positionen, Summen, Zahlungsbedingungen und Bankverbindung von Seite zu Seite fließen;
+* die *Beschriftungen*, die das Programm vor die Werte druckt (auf Deutsch oder Englisch, wie für die Rechnung gewählt). Jede Beschriftung lässt sich verschieben oder löschen, denn ein Briefbogen druckt sie vielleicht schon;
+* einen *Schlusstext* und ein *Unterschriftsbild*, die mit dem Textbereich wandern. Das Bild wird in der Layout-Datei gespeichert, jeder, der die Datei bekommt, kann es sehen;
+* die Quelle der *Folgeseiten*: Seite 2 der Vorlage (wird automatisch benutzt, wenn die Vorlage zwei Seiten hat), Seite 1 noch einmal, die erste Seite eines anderen PDFs oder eine leere Seite. Braucht eine lange Rechnung eine zweite Seite und die Vorlage hat nur eine, fragt der Assistent und merkt sich die Antwort im Layout.
+
+Ein Wert, der nicht in seinen Bereich passt, ist ein Fehler und wird nie abgeschnitten: Vergrößern Sie den Bereich im Layout-Editor.
+
+*Layout-Editor:* *Assistenten > Vorlagen-Layout bearbeiten...* (oder *Layout bearbeiten...* im Schritt Vorlage) zeigt die Seiten der Vorlage mit den eingezeichneten Bereichen. Bereiche werden mit der Maus verschoben und in der Größe geändert, die Liste der Elemente enthält die Felder des Textbereichs in ihrer Reihenfolge, und ein Feld stellt Schriftgröße, Ausrichtung, Beschriftungen und die Folgeseiten ein. *Beispieldaten* füllt die Seite mit einer erfundenen Rechnung, so sehen Sie die Wirkung beim Arbeiten; Warnungen sagen, wenn ein Bereich Text der Vorlage enthält, die Seite verlässt oder zu klein ist. *Auf DIN 5008 zurücksetzen* beginnt neu mit Form A oder B. *Speichern* sagt, wo die Layout-Datei geschrieben wurde.
+
+*PDF/A-Stufe:* Eine erzeugte Rechnung ist PDF/A-3. Die Stufe ist *u* (Vorgabe: Text lässt sich extrahieren), *b* (einfach) oder *a* (mit formaler Struktur, siehe <<tagging,Stufe a>>). Sie wird im Schritt Prüfung gewählt und gemerkt, und `--pdfaLevel` setzt sie auf der Kommandozeile. Die erzeugte Rechnung hat keine eigene logische Struktur (keine Unterstützung für Screenreader); die Tags der Vorlage werden entfernt.
 
 ifdef::backend-pdf[<<<]
 
